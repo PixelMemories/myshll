@@ -140,10 +140,10 @@ int myShellLaunch(char **args)
 	else
 	{
 		// The Parent Process
-	do 
-	{
-      wpid = waitpid(pid, &status, WUNTRACED);
-    } while (!WIFEXITED(status) && !WIFSIGNALED(status));
+		do 
+		{
+      			wpid = waitpid(pid, &status, WUNTRACED);
+    		} while (!WIFEXITED(status) && !WIFSIGNALED(status));
 	}
 	return 1;
 }
@@ -221,12 +221,12 @@ int main(int argc, char **argv)
 	if (isatty(0) && argc == 1)
         //interactive
 		myShellInteract();
-	else if (argc == 2)
-        //Other mode.
-		myShellScript(argv[1]);
-	else
+	else if (argc > 2)
+        
 		printf("\nInvalid Number of Arguments");
-
+	else
+		//Other mode.
+		myShellScript(argv[1]);
 	// Exit the Shell
 	return EXIT_SUCCESS;
 }
