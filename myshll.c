@@ -118,6 +118,23 @@ int myShell_exit()
 	return 0;
 }
 
+int execShell(char **args)
+{
+	int ret;
+	if (args[0] == NULL)
+	{
+		// Empty command
+		return 1;
+	}
+	// Loop to check for builtin functions
+	for (int i=0; i< numBuiltin(); i++) // numBuiltin() returns the number of builtin functions
+	{
+		if(strcmp(args[0], builtin_cmd[i])==0) // Check if user function matches builtin function name
+			return (*builtin_func[i])(args); // Call respective builtin function with arguments
+	}
+	ret = myShellLaunch(args);
+	return ret;
+}
 
 // Read and Parse from Config File
 int readConfig()
