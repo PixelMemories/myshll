@@ -167,33 +167,6 @@ int execShell(char **args)
 	return ret;
 }
 
-// Read and Parse from Config File
-int readConfig()
-{
-	FILE *fptr;
-	char line[200];
-	char **args;
-	fptr = fopen("config", "r");
-	if (fptr == NULL)
-	{
-		printf("Unable to find config file.\n");
-		return 1;
-	}
-	else
-	{
-		while(fgets(line, sizeof(line), fptr) != NULL)
-		{
-			printf("\n%s", line);
-			args=splitLine(line);
-			if(strcmp(args[0], "export")==0)
-				strcpy(SHELL_NAME, args[1]);
-		}
-	}
-	free(args);
-	fclose(fptr);
-	return 1;
-}
-
 // When myShell is called Interactively
 int myShellInteract()
 {
@@ -244,8 +217,6 @@ int myShellScript(char filename[100])
 
 int main(int argc, char **argv)
 {
-	// Read from myShell Configuration Files
-	readConfig();
 	// Parsing commands Interactive mode or Script Mode
 	if (isatty(0) || argc ==1)
         //interactive
