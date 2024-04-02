@@ -206,7 +206,7 @@ int myShellInteract()
 		args=splitLine(line);
 
 		//Do Shell
-
+		execShell(args);
 
 		free(line);
 		free(args);
@@ -234,7 +234,7 @@ int myShellScript(char filename[100])
 		{
 			printf("\n%s", line);
 			args=splitLine(line);
-			//execShell(args);
+			execShell(args);
 		}
 	}
 	free(args);
