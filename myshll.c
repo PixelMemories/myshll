@@ -218,7 +218,7 @@ int myShellScript(char filename[100])
 int main(int argc, char **argv)
 {
 	// Parsing commands Interactive mode or Script Mode
-	if (isatty(0) || argc ==1)
+	if (isatty(0) && argc == 1)
         //interactive
 		myShellInteract();
 	else if (argc == 2)
