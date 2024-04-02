@@ -186,7 +186,7 @@ int myShellScript(char filename[100])
 		{
 			printf("\n%s", line);
 			args=splitLine(line);
-			execShell(args);
+			//execShell(args);
 		}
 	}
 	free(args);
