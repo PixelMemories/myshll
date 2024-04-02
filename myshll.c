@@ -247,7 +247,7 @@ int main(int argc, char **argv)
 	// Read from myShell Configuration Files
 	readConfig();
 	// Parsing commands Interactive mode or Script Mode
-	if (argc == 1)
+	if (isatty(0))
         //interactive
 		myShellInteract();
 	else if (argc == 2)
