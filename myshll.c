@@ -71,7 +71,7 @@ int myShell_exit();
 int myShell_redirect_output(char **args);
 
 // Definitions
-char *builtin_cmd[] = {"cd", "exit"};
+char *builtin_cmd[] = {"cd", "exit", "ls"};
 
 int (*builtin_func[])(char **) = {&myShell_cd, &myShell_exit};
 
