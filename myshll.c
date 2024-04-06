@@ -69,11 +69,14 @@ char **splitLine(char *line) {
 int myShell_cd(char **args);
 int myShell_exit();
 int myShell_redirect_output(char **args);
+int myShell_pwd();
+int myShell_which(char **args);
+int myShell_redirect_input(char **args);
 
 // Definitions
 char *builtin_cmd[] = {"cd", "exit", "pwd", "which"};
 
-int (*builtin_func[])(char **) = {&myShell_cd, &myShell_exit};
+int (*builtin_func[])(char **) = {&myShell_cd, &myShell_exit, &myShell_pwd, &myShell_which};
 
 int numBuiltin() {
     return sizeof(builtin_cmd) / sizeof(char *);
@@ -96,9 +99,72 @@ int myShell_exit() {
     return 0;
 }
 
+int myShell_pwd(){
+    // dynamic array?????
+    char pwd[1024]; 
+
+    if (getcwd(pwd, sizeof(pwd)) != NULL) {
+        printf("%s\n", pwd);
+    } else {
+        perror("pwd error");
+        return 1;
+    }
+
+    return 0;
+}
+
+int myShell_which(char **args) {
+    int argc = 0;
+
+    // Count the number of arguments
+    while (args[argc] != NULL) {
+        argc++;
+    }
+
+    if (argc != 2) {
+        fprintf(stderr, "Usage: %s <program_name>\n", args[0]);
+        return 1; // Return error code 1 for wrong number of arguments
+    }
+
+    char *program_name = args[1];
+    char *path = getenv("PATH");
+
+    if (path == NULL) {
+        fprintf(stderr, "Error: PATH environment variable is not set.\n");
+        return 1;
+    }
+
+    char *path_copy = strdup(path);
+    if (path_copy == NULL) {
+        fprintf(stderr, "Error: Memory allocation failed.\n");
+        return 1;
+    }
+
+    char *token;
+    // dynamically size array???
+    char file_path[1024];
+
+    token = strtok(path_copy, ":");
+    while (token != NULL) {
+        snprintf(file_path, 1024, "%s/%s", token, program_name);
+        if (access(file_path, X_OK) == 0) {
+            printf("%s\n", file_path);
+            free(path_copy);
+            return 0;
+        }
+        token = strtok(NULL, ":");
+    }
+
+    free(path_copy);
+
+    fprintf(stderr, "%s: program not found\n", args[1]);
+    return 1;
+}
+
+
+
 int myShell_redirect_output(char **args) {
     int i = 0;
-    // Check if the command is the shell prompt itself
     if (strcmp(args[0], SHELL_NAME) == 0) {
         return 0; // Skip redirection
     }
@@ -113,8 +179,6 @@ int myShell_redirect_output(char **args) {
             int pid = fork();
 
             if (pid == 0) {
-                // Inside the child process
-                // Open the file specified after '>'
                 int redirect_output_fd = open(args[i + 1], O_CREAT | O_WRONLY | O_TRUNC, 0666);
                 if (redirect_output_fd == -1) {
                     perror("open");
