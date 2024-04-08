@@ -386,18 +386,16 @@ int myShellInteract() {
 
 // When myShell is called with a Script as Argument
 int myShellBatch(FILE *filename) {
-    printf("Received Script. Opening %s", filename);
-    FILE *fptr;
+    printf("Received Script. Opening %s", fileno(filename));
     char line[MAX_COMMAND_LENGTH];
     char **args;
-    fptr = fopen(filename, "r");
-    if (fptr == NULL) {
+    if (filename == NULL) {
         printf("\nUnable to open file.");
         return 1;
     } else {
         printf("\nFile Opened. Parsing. Parsed commands displayed first.");
-        while (fgets(line, sizeof(line), fptr) != NULL) {
-            size_t len = strlen(command);
+        while (fgets(line, sizeof(line), filename) != NULL) {
+            size_t len = strlen(line);
             if (len > 0 && line[len - 1] == '\n') {
                 line[len - 1] = '\0';
             }
