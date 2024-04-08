@@ -386,7 +386,7 @@ int myShellInteract() {
 
 // When myShell is called with a Script as Argument
 int myShellBatch(FILE *filename) {
-    printf("Received Script. Opening %s", fileno(filename));
+    printf("Received Script. Opening %s\n", filename);
     char line[MAX_COMMAND_LENGTH];
     char **args;
     if (filename == NULL) {
@@ -405,7 +405,7 @@ int myShellBatch(FILE *filename) {
         }
     }
     free(args);
-    fclose(fptr);
+    fclose(filename);
     return 1;
 }
 
