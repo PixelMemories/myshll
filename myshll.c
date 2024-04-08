@@ -395,20 +395,17 @@ int myShellBatch(FILE *filename) {
     } else {
         printf("\nFile Opened. Parsing. Parsed commands displayed first.");
         while (fgets(line, sizeof(line), filename) != NULL) {
-            //size_t len = strlen(line);
-            //if (len > 0 && line[len - 1] == '\n') {
-                //line[len - 1] = '\0';
-            //}
+            size_t len = strlen(line);
+            if (len > 0 && line[len - 1] == '\n') {
+                line[len - 1] = '\0';
+            }
             printf("\n%s", line);
             args = splitLine(line);
             execShell(args);
         }
-        printf("I got here\n");
     }
     free(args);
-    printf("I got here2\n");
     fclose(filename);
-    printf("I got here3\n");
     return 1;
 }
 
