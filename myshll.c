@@ -437,7 +437,6 @@ int main(int argc, char **argv) {
                 return 1;
             }
             myShellBatch(file);
-            fclose(file);
         } else {
             printf("Running in batch mode with piped input\n");
             myShellBatch(stdin);
