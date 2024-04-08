@@ -241,6 +241,85 @@ int myShell_redirect_input_output(char **args) {
     return 0;
 }
 
+
+// Function to check for pipes and execute accordingly
+int myShell_pipe(char **args) {
+    int pipefd[2]; // file descriptors for the pipe
+    int pipe_pos = -1; // Position of the pipe character in args
+    pid_t pid1, pid2;
+
+    // Find the position of the pipe character, if present
+    for (int i = 0; args[i] != NULL; i++) {
+        if (strcmp(args[i], "|") == 0) {
+            pipe_pos = i;
+            break;
+        }
+    }
+
+    // No pipe found, return indicating that no pipe handling is necessary
+    if (pipe_pos == -1) {
+        return 0;
+    }
+
+    // Create a pipe
+    if (pipe(pipefd) == -1) {
+        perror("pipe");
+        exit(EXIT_FAILURE);
+    }
+
+    // Fork the first child process
+    pid1 = fork();
+    if (pid1 == -1) {
+        perror("fork");
+        exit(EXIT_FAILURE);
+    }
+
+    if (pid1 == 0) {
+        // Child process 1: executes the command before the pipe
+        // Redirect stdout to the write end of the pipe
+        dup2(pipefd[1], STDOUT_FILENO);
+        close(pipefd[0]); // Close unused read end
+        close(pipefd[1]); // Close write end after dup2
+
+        // Null-terminate the args array at the position of the pipe
+        args[pipe_pos] = NULL;
+        execvp(args[0], args);
+        perror("execvp");
+        exit(EXIT_FAILURE);
+    }
+
+    // Fork the second child process
+    pid2 = fork();
+    if (pid2 == -1) {
+        perror("fork");
+        exit(EXIT_FAILURE);
+    }
+
+    if (pid2 == 0) {
+        // Child process 2: executes the command after the pipe
+        // Redirect stdin to the read end of the pipe
+        dup2(pipefd[0], STDIN_FILENO);
+        close(pipefd[1]); // Close unused write end
+        close(pipefd[0]); // Close read end after dup2
+
+        // Execute the command following the pipe
+        execvp(args[pipe_pos + 1], &args[pipe_pos + 1]);
+        perror("execvp");
+        exit(EXIT_FAILURE);
+    }
+
+    // Close pipe ends in the parent
+    close(pipefd[0]);
+    close(pipefd[1]);
+
+    // Wait for both child processes to complete
+    waitpid(pid1, NULL, 0);
+    waitpid(pid2, NULL, 0);
+
+    // Return indicating that pipe handling was done
+    return 1;
+}
+
 int myShellLaunch(char **args) {
     pid_t pid, wpid;
     int status;
@@ -266,9 +345,12 @@ int myShellLaunch(char **args) {
 
 // Function to execute command from terminal
 int execShell(char **args) {
-    int ret;
     if (args[0] == NULL) {
         return 1;
+    }
+    // Handle piping
+    if (myShell_pipe(args)) {
+        return 1; // Pipe handled
     }
     // Loop to check for builtin functions
     for (int i = 0; i < numBuiltin(); i++) {
@@ -276,15 +358,12 @@ int execShell(char **args) {
             return (*builtin_func[i])(args);
         }
     }
-    // Check for redirection
+    // Handle redirection
     if (myShell_redirect_input_output(args)) {
         return 1;
     }
-
-
-
-    ret = myShellLaunch(args);
-    return ret;
+    // If no piping or redirection, launch command normally
+    return myShellLaunch(args);
 }
 
 // When myShell is called Interactively
