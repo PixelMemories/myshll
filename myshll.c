@@ -8,6 +8,8 @@
 char SHELL_NAME[50] = "myShell";
 int QUIT = 0;
 
+#define MAX_COMMAND_LENGTH 1024
+
 // Function to read a line from command into the buffer
 char *readLine() {
     char *line = (char *)malloc(sizeof(char) * 1024);
@@ -383,10 +385,10 @@ int myShellInteract() {
 }
 
 // When myShell is called with a Script as Argument
-int myShellScript(char filename[100]) {
+int myShellBatch(FILE *filename) {
     printf("Received Script. Opening %s", filename);
     FILE *fptr;
-    char line[200];
+    char line[MAX_COMMAND_LENGTH];
     char **args;
     fptr = fopen(filename, "r");
     if (fptr == NULL) {
@@ -395,6 +397,10 @@ int myShellScript(char filename[100]) {
     } else {
         printf("\nFile Opened. Parsing. Parsed commands displayed first.");
         while (fgets(line, sizeof(line), fptr) != NULL) {
+            size_t len = strlen(command);
+            if (len > 0 && line[len - 1] == '\n') {
+                line[len - 1] = '\0';
+            }
             printf("\n%s", line);
             args = splitLine(line);
             execShell(args);
@@ -405,17 +411,42 @@ int myShellScript(char filename[100]) {
     return 1;
 }
 
+int BMCheck(int argc, char *argv[]) {
+    // Check if there are command-line arguments
+    if (argc > 1) {
+        return 1; // Running in batch mode
+    }
+
+    // Check if input is being piped
+    if (!isatty(fileno(stdin))) {
+        return 1; // Running in batch mode
+    }
+
+    return 0; // Running in interactive mode
+}
+
 int main(int argc, char **argv) {
     // Parsing commands Interactive mode or Script Mode
-    if (isatty(0) && argc == 1) {
-        //interactive
-        myShellInteract();
-    } else if (argc > 2) {
-        printf("\nInvalid Number of Arguments");
+    if (BMCheck(argc, argv)) {
+        printf("Running in batch mode\n");
+        if (argc > 1) {
+            FILE *file = fopen(argv[1], "r");
+            if (file == NULL) {
+                perror("Error opening file");
+                return 1;
+            }
+            myShellBatch(file);
+            fclose(file);
+        } else {
+            myShellBatch(stdin);
+        }
+
     } else {
-        //Other mode.
-        myShellScript(argv[1]);
+        printf("Running in interactive mode\n");
+        myShellInteract();
+
     }
+    
     // Exit the Shell
     return EXIT_SUCCESS;
 }
