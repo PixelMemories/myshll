@@ -404,7 +404,6 @@ int myShellBatch(FILE *filename) {
             execShell(args);
         }
     }
-    free(args);
     fclose(filename);
     return 1;
 }
