@@ -386,7 +386,6 @@ int myShellInteract() {
 
 // When myShell is called with a Script as Argument
 int myShellBatch(FILE *filename) {
-    printf("Received Script. Opening %s\n", filename);
     char line[MAX_COMMAND_LENGTH];
     char **args;
     if (filename == NULL) {
@@ -426,8 +425,8 @@ int BMCheck(int argc, char *argv[]) {
 int main(int argc, char **argv) {
     // Parsing commands Interactive mode or Script Mode
     if (BMCheck(argc, argv)) {
-        printf("Running in batch mode\n");
         if (argc > 1) {
+            printf("Running in batch mode with file: %s\n", argv[1]);
             FILE *file = fopen(argv[1], "r");
             if (file == NULL) {
                 perror("Error opening file");
@@ -436,6 +435,7 @@ int main(int argc, char **argv) {
             myShellBatch(file);
             fclose(file);
         } else {
+            printf("Running in batch mode with piped input\n");
             myShellBatch(stdin);
         }
 
