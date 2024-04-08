@@ -402,7 +402,7 @@ int myShellBatch(FILE *filename) {
             printf("\n%s", line);
             args = splitLine(line);
             execShell(args);
-            printf("args: %s\n", args);
+            printf("args: %s\n", *args);
         }
         printf("I got here\n");
     }
