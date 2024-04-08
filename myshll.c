@@ -97,6 +97,7 @@ int myShell_cd(char **args) {
 }
 
 int myShell_exit() {
+    printf("Exiting Shell... See you soon!!\n");
     QUIT = 1;
     return 0;
 }
@@ -441,6 +442,7 @@ int main(int argc, char **argv) {
 
     } else {
         printf("Running in interactive mode\n");
+        printf("Welcome to your personal Shell!!\n");
         myShellInteract();
 
     }
