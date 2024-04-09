@@ -482,38 +482,58 @@ int execShell(char **args) {
         return 1;
     }
     
-    // Skip first token if it's "else" or "then"
-    int start_index = 0;
-    if (strcmp(expanded_args[0], "else") == 0 || strcmp(expanded_args[0], "then") == 0) {
-        start_index = 1;
-    }
+    if (expanded_args[0]=="then"|| expanded_args[0] == "else"){
+        int num_expanded_args = countArgs(expanded_args);
+        char **new_expanded_args = malloc((num_expanded_args) * sizeof(char *));
+        if (new_expanded_args == NULL) {
+            perror("malloc");
+            exit(EXIT_FAILURE);
+        }
     
-    // Loop to check for builtin functions, starting from index 1 if "else" or "then" is the first token
-    for (int i = start_index; i < numBuiltin(); i++) {
-        if (strcmp(expanded_args[i], builtin_cmd[i]) == 0) {
-            int result = (*builtin_func[i])(expanded_args + i);
+        // Copy the expanded arguments starting from index 1
+        for (int i = 1; i < num_expanded_args; i++) {
+            new_expanded_args[i - 1] = strdup(expanded_args[i]);
+            if (new_expanded_args[i - 1] == NULL) {
+                perror("strdup");
+                exit(EXIT_FAILURE);
+            }
+        }
+        new_expanded_args[num_expanded_args - 1] = NULL; // Set the last element to NULL
+        }
+    
+        // Copy the expanded arguments starting from index 1
+        for (int i = 1; i < num_expanded_args; i++) {
+            new_expanded_args[i - 1] = strdup(expanded_args[i]);
+            if (new_expanded_args[i - 1] == NULL) {
+                perror("strdup");
+                exit(EXIT_FAILURE);
+            }
+        }
+        new_expanded_args[num_expanded_args - 1] = NULL; // Set the last element to NULL
+        expanded_args = new_expanded_args;
+    }
+
+    // Loop to check for builtin functions
+    for (int i = 1; i < numBuiltin(); i++) {
+        if (strcmp(expanded_args[0], builtin_cmd[i]) == 0) {
+            int result = (*builtin_func[i])(expanded_args);
             free(expanded_args); // Free memory allocated by expand_wildcards
             return result;
         }
     }
 
-    // Handle redirection, skip first token if it's "else" or "then"
-    if (strcmp(expanded_args[start_index], "else") != 0 && strcmp(expanded_args[start_index], "then") != 0) {
-        if (myShell_execute(expanded_args + start_index)) {
-            free(expanded_args); // Free memory allocated by expand_wildcards
-            return 1;
-        }
-    }
-
-    // If no piping or redirection, launch command normally, skip first token if it's "else" or "then"
-    if (strcmp(expanded_args[start_index], "else") != 0 && strcmp(expanded_args[start_index], "then") != 0) {
-        int result = myShellLaunch(expanded_args + start_index);
+    // Handle redirection
+    if (myShell_execute(expanded_args)) {
         free(expanded_args); // Free memory allocated by expand_wildcards
-        return result;
+        return 1;
     }
 
+    // If no piping or redirection, launch command normally
+    int result = myShellLaunch(expanded_args);
     free(expanded_args); // Free memory allocated by expand_wildcards
-    return 0; // Return success if "else" or "then" is the first token
+    // Free the array itself
+    free(new_expanded_args);
+    return result;
 }
 
 // When myShell is called Interactively
