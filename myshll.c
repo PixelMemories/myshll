@@ -70,6 +70,49 @@ char **splitLine(char *line) {
     return tokens;
 }
 
+void input_redirection_files(char ** args, int index){
+    char *first_file = args[index]; // Assuming the first file is at index 1
+    
+    // Open the first file for appending
+    int output_fd = open(first_file, O_WRONLY | O_CREAT | O_APPEND, 0666);
+    if (output_fd == -1) {
+        perror("Error opening first file");
+        exit(EXIT_FAILURE);
+    }
+
+    // Iterate through input files starting from the second one
+    for (int i = index+1; args[i] != NULL && strcmp(args[i], ">") != 0 && strcmp(args[i], "|") != 0; i++) {
+        // Open the current input file for reading
+        int input_fd = open(args[i], O_RDONLY);
+        if (input_fd == -1) {
+            perror("Error opening input file");
+            exit(EXIT_FAILURE);
+        }
+
+        // Move to the end of the first file
+        if (lseek(output_fd, 0, SEEK_END) == -1) {
+            perror("Error seeking first file");
+            exit(EXIT_FAILURE);
+        }
+
+        // Copy content of input file to the end of the first file
+        char buffer[4096];
+        ssize_t bytes_read;
+        while ((bytes_read = read(input_fd, buffer, sizeof(buffer))) > 0) {
+            if (write(output_fd, buffer, bytes_read) == -1) {
+                perror("Error writing to first file");
+                exit(EXIT_FAILURE);
+            }
+        }
+
+        close(input_fd);
+    }
+
+    close(output_fd);
+
+
+}
+
 // Function Declarations
 int myShell_cd(char **args);
 int myShell_exit();
@@ -181,18 +224,42 @@ int myShell_redirect_input_output(char **args) {
     int i = 0;
     int redirect_input = 0, redirect_output = 0;
     char *input_file = NULL, *output_file = NULL;
+    char input_buffer[BUFFER_SIZE];
+    ssize_t input_buffer_size = 0;
 
+    // Find input and output files
     while (args[i] != NULL) {
         if (strcmp(args[i], "<") == 0) {
-            // Check if a filename is provided after '<'
             if (args[i + 1] == NULL) {
                 printf("Missing filename after <\n");
                 return 1;
             }
-            input_file = args[i + 1];
+            input_file = args[i+1];
             redirect_input = 1;
+
+            // Read the contents of the input file into the buffer
+            int input_fd = open(input_file, O_RDONLY);
+            if (input_fd == -1) {
+                perror("open");
+                return 1;
+            }
+            ssize_t bytes_read;
+            while ((bytes_read = read(input_fd, input_buffer + input_buffer_size, BUFFER_SIZE - input_buffer_size)) > 0) {
+                input_buffer_size += bytes_read;
+                if (input_buffer_size >= BUFFER_SIZE) {
+                    printf("Input file too large to handle\n");
+                    close(input_fd);
+                    return 1;
+                }
+            }
+            close(input_fd);
+            if (bytes_read == -1) {
+                perror("read");
+                return 1;
+            }
+
+            input_redirection_files(args, i+1);
         } else if (strcmp(args[i], ">") == 0) {
-            // Check if a filename is provided after '>'
             if (args[i + 1] == NULL) {
                 printf("Missing filename after >\n");
                 return 1;
@@ -208,28 +275,25 @@ int myShell_redirect_input_output(char **args) {
     if (pid == 0) {
         // Child process
         if (redirect_input) {
-            int redirect_input_fd = open(input_file, O_RDONLY);
-            if (redirect_input_fd == -1) {
+            int input_fd = open(input_file, O_RDONLY);
+            if (input_fd == -1) {
                 perror("open");
                 exit(EXIT_FAILURE);
             }
-            // Redirect standard input to the file
-            dup2(redirect_input_fd, STDIN_FILENO);
-            close(redirect_input_fd);
+            dup2(input_fd, STDIN_FILENO);
+            close(input_fd);
         }
 
         if (redirect_output) {
-            int redirect_output_fd = open(output_file, O_CREAT | O_WRONLY | O_TRUNC, 0666);
-            if (redirect_output_fd == -1) {
+            int output_fd = open(output_file, O_CREAT | O_WRONLY | O_TRUNC, 0666);
+            if (output_fd == -1) {
                 perror("open");
                 exit(EXIT_FAILURE);
             }
-            // Redirect standard output to the file
-            dup2(redirect_output_fd, STDOUT_FILENO);
-            close(redirect_output_fd);
+            dup2(output_fd, STDOUT_FILENO);
+            close(output_fd);
         }
 
-        // Execute the external command
         execvp(args[0], args);
         perror("execvp");
         exit(EXIT_FAILURE);
@@ -241,6 +305,21 @@ int myShell_redirect_input_output(char **args) {
         // Inside the parent process
         int status;
         waitpid(pid, &status, 0); // Wait for the child process to complete
+        
+        // If input redirection is enabled, overwrite the input file with the buffer contents
+        if (redirect_input) {
+            int input_fd = open(input_file, O_WRONLY | O_TRUNC);
+            if (input_fd == -1) {
+                perror("open");
+                return 1;
+            }
+            if (write(input_fd, input_buffer, input_buffer_size) == -1) {
+                perror("write");
+                return 1;
+            }
+            close(input_fd);
+        }
+
         return 1;
     }
 
