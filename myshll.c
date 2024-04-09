@@ -10,6 +10,7 @@
 
 char SHELL_NAME[50] = "myShell";
 int QUIT = 0;
+int LastComStat = 0;
 
 #define MAX_COMMAND_LENGTH 1024
 #define BUFFER_SIZE 4096
@@ -455,8 +456,10 @@ int myShellLaunch(char **args) {
         if (execvp(args[0], args) == -1) {
             perror("myShell: ");
             exit(EXIT_FAILURE);
+            LastComStat = 0;
         }
         exit(EXIT_SUCCESS);
+        LastComStat = 1;
     } else if (pid < 0) {
         // Forking Error
         perror("myShell: ");
@@ -480,7 +483,7 @@ int execShell(char **args) {
     }
 
     // Loop to check for builtin functions
-    for (int i = 0; i < numBuiltin(); i++) {
+    for (int i = 1; i < numBuiltin(); i++) {
         if (strcmp(expanded_args[0], builtin_cmd[i]) == 0) {
             int result = (*builtin_func[i])(expanded_args);
             free(expanded_args); // Free memory allocated by expand_wildcards
@@ -491,6 +494,7 @@ int execShell(char **args) {
     // Handle redirection
     if (myShell_execute(expanded_args)) {
         free(expanded_args); // Free memory allocated by expand_wildcards
+        LastComStat = 1;
         return 1;
     }
 
@@ -509,7 +513,17 @@ int myShellInteract() {
         line = readLine();
         args = splitLine(line);
         //Do Shell
-        execShell(args);
+        if (strcmp(args[0], "then") == 0 && LastComStat == 0){
+            printf("nope\n");
+            LastComStat = 0;
+        } else if (strcmp(args[0], "else") == 0 && LastComStat == 1){
+            printf("nope\n");
+            LastComStat = 0;
+        } else if (strcmp(args[0], "then") == 0 || strcmp(args[0], "else") == 0){
+            execShell(args + 1);
+        } else {
+            execShell(args);
+        }
         free(line);
         free(args);
     }
