@@ -393,7 +393,7 @@ int myShell_execute(char **args) {
     return 0;
 }
 
-char* expand_wildcards(char *tokens[]) {
+char** expand_wildcards(char *tokens[]) {
     glob_t glob_result;
     int i, flags = 0;
 
@@ -455,7 +455,7 @@ int execShell(char **args) {
             return (*builtin_func[i])(args);
         }
     }
-    char* expArgs = expand_wildcards(args);
+    char** expArgs = expand_wildcards(args);
     
     // Handle redirection
     if (myShell_execute(expArgs)) {
