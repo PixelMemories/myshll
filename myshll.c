@@ -444,6 +444,9 @@ void expand_wildcards(char *tokens[]) {
     tokens[i] = NULL;
 
     // Free memory allocated for expanded_tokens
+    for (i = 0; i < k; i++) {
+        free(expanded_tokens[i]);
+    }
     free(expanded_tokens);
 }
 
