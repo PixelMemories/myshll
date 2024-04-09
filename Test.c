@@ -223,7 +223,7 @@ int myShell_which(char **args) {
 
 void execute_command(char **args, int redirect_input, char *input_file, int redirect_output, char *output_file);
 
-void myShell_execute(char **args) {
+int myShell_execute(char **args) {
     int i = 0;
     int redirect_input = 0, redirect_output = 0, piping = 0;
     char *input_file = NULL, *output_file = NULL;
@@ -244,7 +244,7 @@ void myShell_execute(char **args) {
         } else if (strcmp(args[i], ">") == 0) {
             if (args[i + 1] == NULL) {
                 printf("Missing filename after >\n");
-                return;
+                return 0;
             }
             output_file = args[i + 1];
             redirect_output = 1;
@@ -252,7 +252,7 @@ void myShell_execute(char **args) {
         } else if (strcmp(args[i], "|") == 0){
             if (args[i + 1] == NULL) {
                 printf("Missing command after |\n");
-                return;
+                return 0;
             }
             piping = 1;
             i++;
@@ -271,7 +271,7 @@ void myShell_execute(char **args) {
         int pipefd[2];
         if (pipe(pipefd) == -1) {
             perror("pipe");
-            return;
+            return 0;
         }
 
         pid = fork();
@@ -285,7 +285,7 @@ void myShell_execute(char **args) {
         } else if (pid < 0) {
             // Forking Error
             perror("fork");
-            return;
+            return 0;
         }
 
         // Parent process
@@ -297,6 +297,7 @@ void myShell_execute(char **args) {
     } else {
         execute_command(args, redirect_input, input_file, redirect_output, output_file);
     }
+    return 1;
 }
 
 void execute_command(char **args, int redirect_input, char *input_file, int redirect_output, char *output_file) {
