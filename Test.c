@@ -220,7 +220,6 @@ int myShell_which(char **args) {
 }
 
 
-
 int execute_command(char **args, int redirect_input, char *input_file, int redirect_output, char *output_file);
 
 int myShell_execute(char **args) {
@@ -267,33 +266,49 @@ int myShell_execute(char **args) {
     }
 
     if (piping) {
-        int pid;
         int pipefd[2];
         if (pipe(pipefd) == -1) {
             perror("pipe");
             return 1;
         }
 
-        pid = fork();
-        if (pid == 0) {
-            // Child process
+        int pid1 = fork();
+        if (pid1 == 0) {
+            // Child process for the first command in the pipeline
             close(pipefd[0]); // Close unused read end of the pipe
             dup2(pipefd[1], STDOUT_FILENO); // Redirect stdout to the write end of the pipe
             close(pipefd[1]); // Close the write end of the pipe
 
             return execute_command(pipe_output_files, redirect_input, input_file, 0, NULL);
-        } else if (pid < 0) {
+        } else if (pid1 < 0) {
+            // Forking Error
+            perror("fork");
+            return 1;
+        }
+
+        int pid2 = fork();
+        if (pid2 == 0) {
+            // Child process for the second command in the pipeline
+            close(pipefd[1]); // Close unused write end of the pipe
+            dup2(pipefd[0], STDIN_FILENO); // Redirect stdin to the read end of the pipe
+            close(pipefd[0]); // Close the read end of the pipe
+
+            return execute_command(pipe_input_files, 0, NULL, redirect_output, output_file);
+        } else if (pid2 < 0) {
             // Forking Error
             perror("fork");
             return 1;
         }
 
         // Parent process
-        close(pipefd[1]); // Close the write end of the pipe
-        dup2(pipefd[0], STDIN_FILENO); // Redirect stdin to the read end of the pipe
         close(pipefd[0]); // Close the read end of the pipe
+        close(pipefd[1]); // Close the write end of the pipe
 
-        return execute_command(pipe_input_files, 0, NULL, redirect_output, output_file);
+        int status1, status2;
+        waitpid(pid1, &status1, 0); // Wait for the first child process to complete
+        waitpid(pid2, &status2, 0); // Wait for the second child process to complete
+
+        return (status1 || status2); // Return the status of the last executed command
     } else {
         return execute_command(args, redirect_input, input_file, redirect_output, output_file);
     }
