@@ -257,15 +257,17 @@ void execute_command(char *args[]) {
             int fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0666);
             dup2(fd, STDOUT_FILENO);
             close(fd);
-            args[arg_count] = NULL; // Nullify '>' and filename
-            args[arg_count + 1] = NULL;
+            args[arg_count] = NULL; // Nullify '>'
+            args[arg_count + 1] = NULL; // Nullify filename
+            arg_count += 2; // Skip the filename
         } else if (strcmp(args[arg_count], "<") == 0) { // Handle redirect input
             char *filename = args[arg_count + 1];
             int fd = open(filename, O_RDONLY);
             dup2(fd, STDIN_FILENO);
             close(fd);
-            args[arg_count] = NULL; // Nullify '<' and filename
-            args[arg_count + 1] = NULL;
+            args[arg_count] = NULL; // Nullify '<'
+            args[arg_count + 1] = NULL; // Nullify filename
+            arg_count += 2; // Skip the filename
         } else { // Handle command arguments
             arg_count++;
         }
