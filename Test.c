@@ -7,6 +7,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <glob.h>
+#include <dirent.h>
 
 
 char SHELL_NAME[50] = "myShell";
