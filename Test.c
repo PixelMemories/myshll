@@ -75,7 +75,6 @@ char **splitLine(char *line) {
 // Function Declarations
 int myShell_cd(char **args);
 int myShell_exit();
-int myShell_redirect_input_output(char **args);
 int myShell_pwd();
 int myShell_which(char **args);
 
@@ -267,10 +266,6 @@ int execShell(char **args) {
     if (args[0] == NULL) {
         return 1;
     }
-    // Handle piping
-    if (myShell_pipe(args)) {
-        return 1; // Pipe handled
-    }
     // Loop to check for builtin functions
     for (int i = 0; i < numBuiltin(); i++) {
         if (strcmp(args[0], builtin_cmd[i]) == 0) {
@@ -278,13 +273,6 @@ int execShell(char **args) {
         }
     }
     // Handle redirection
-    if (myShell_redirect_input_output(args)) {
-        return 1;
-    }
-    // Handle Wildcards
-    if (expand_wildcards(args)){
-        return 1;
-    }
     
     // If no piping or redirection, launch command normally
     return myShellLaunch(args);
