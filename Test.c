@@ -220,7 +220,7 @@ void execute_command(char *args[]) {
     int arg_count = 0;
     int pipe_fd[2];
     pid_t pid;
-
+    
     // Parse command arguments
     // Loop to check for builtin functions
     for (int i = 0; i < numBuiltin(); i++) {
@@ -230,10 +230,8 @@ void execute_command(char *args[]) {
         }
     }
     while (args[arg_count] != NULL) {
-        printf("arg1 %s\n",args[arg_count]);
         if (strcmp(args[arg_count], "|") == 0) { // Handle pipe
             args[arg_count] = NULL;
-            arg_count = 0;
 
             pipe(pipe_fd);
 
@@ -253,6 +251,7 @@ void execute_command(char *args[]) {
                 dup2(pipe_fd[0], STDIN_FILENO);
                 close(pipe_fd[0]);
             }
+            arg_count++; // Move to the next command
         } else if (strcmp(args[arg_count], ">") == 0) { // Handle redirect output
             char *filename = args[arg_count + 1];
             int fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0666);
@@ -273,7 +272,7 @@ void execute_command(char *args[]) {
             arg_count++;
         }
     }
-    printf("I GOT INSIDE\n");
+
     if ((pid = fork()) == 0) { // Child process
         execvp(args[0], args);
         perror("execvp");
