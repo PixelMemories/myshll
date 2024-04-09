@@ -393,61 +393,57 @@ int myShell_execute(char **args) {
     return 0;
 }
 
-void expand_wildcards(char *tokens[]) {
+char **expand_wildcards(char *tokens[]) {
     glob_t glob_result;
-    int i, j, flags = 0;
-    char **expanded_tokens = NULL;
+    int i, flags = 0;
+    char **expanded_strings = NULL;
+    size_t num_strings = 0;
 
-    // Count number of expanded tokens
-    int num_expanded_tokens = 0;
+    // Iterate over tokens until NULL is encountered
     for (i = 0; tokens[i] != NULL; i++) {
+        // If the token contains wildcard characters
         if (strchr(tokens[i], '*') != NULL || strchr(tokens[i], '?') != NULL) {
+            // Use glob to expand the wildcard pattern
             if (glob(tokens[i], flags, NULL, &glob_result) == 0) {
-                num_expanded_tokens += glob_result.gl_pathc;
-                globfree(&glob_result);
-            }
-        } else {
-            num_expanded_tokens++;
-        }
-    }
-
-    // Allocate memory for expanded tokens
-    expanded_tokens = malloc((num_expanded_tokens + 1) * sizeof(char *));
-    if (expanded_tokens == NULL) {
-        fprintf(stderr, "Memory allocation failed\n");
-        exit(EXIT_FAILURE);
-    }
-
-    // Expand wildcards and store in expanded_tokens
-    int k = 0;
-    for (i = 0; tokens[i] != NULL; i++) {
-        if (strchr(tokens[i], '*') != NULL || strchr(tokens[i], '?') != NULL) {
-            if (glob(tokens[i], flags, NULL, &glob_result) == 0) {
-                for (j = 0; j < glob_result.gl_pathc; j++) {
-                    expanded_tokens[k++] = strdup(glob_result.gl_pathv[j]);
+                // Allocate memory for expanded strings
+                expanded_strings = (char **)realloc(expanded_strings, (num_strings + glob_result.gl_pathc) * sizeof(char *));
+                if (expanded_strings == NULL) {
+                    perror("Memory allocation failed");
+                    return NULL;
                 }
+                // Copy expanded filenames
+                for (int j = 0; j < glob_result.gl_pathc; j++) {
+                    expanded_strings[num_strings++] = strdup(glob_result.gl_pathv[j]);
+                    if (expanded_strings[num_strings - 1] == NULL) {
+                        perror("Memory allocation failed");
+                        return NULL;
+                    }
+                }
+                // Free memory allocated by glob
                 globfree(&glob_result);
             }
         } else {
-            expanded_tokens[k++] = strdup(tokens[i]);
+            // No wildcards, just copy the token
+            expanded_strings = (char **)realloc(expanded_strings, (num_strings + 1) * sizeof(char *));
+            if (expanded_strings == NULL) {
+                perror("Memory allocation failed");
+                return NULL;
+            }
+            expanded_strings[num_strings++] = strdup(tokens[i]);
+            if (expanded_strings[num_strings - 1] == NULL) {
+                perror("Memory allocation failed");
+                return NULL;
+            }
         }
     }
-    expanded_tokens[k] = NULL;
-
-    // Free original tokens and update with expanded tokens
-    for (i = 0; tokens[i] != NULL; i++) {
-        free(tokens[i]);
+    // Add a NULL terminator to the expanded strings array
+    expanded_strings = (char **)realloc(expanded_strings, (num_strings + 1) * sizeof(char *));
+    if (expanded_strings == NULL) {
+        perror("Memory allocation failed");
+        return NULL;
     }
-    for (i = 0; expanded_tokens[i] != NULL; i++) {
-        tokens[i] = expanded_tokens[i];
-    }
-    tokens[i] = NULL;
-
-    // Free memory allocated for expanded_tokens
-    for (i = 0; i < k; i++) {
-        free(expanded_tokens[i]);
-    }
-    free(expanded_tokens);
+    expanded_strings[num_strings] = NULL;
+    return expanded_strings;
 }
 
 int myShellLaunch(char **args) {
@@ -478,22 +474,30 @@ int execShell(char **args) {
     if (args[0] == NULL) {
         return 1;
     }
-    
-    // Loop to check for builtin functions
-    for (int i = 0; i < numBuiltin(); i++) {
-        if (strcmp(args[0], builtin_cmd[i]) == 0) {
-            return (*builtin_func[i])(args);
-        }
-    }
-    expand_wildcards(args);
-    
-    // Handle redirection
-    if (myShell_execute(args)) {
+    char **expanded_args = expand_wildcards(args); // Now expand_wildcards returns char **
+    if (expanded_args == NULL) {
         return 1;
     }
-    
+
+    // Loop to check for builtin functions
+    for (int i = 0; i < numBuiltin(); i++) {
+        if (strcmp(expanded_args[0], builtin_cmd[i]) == 0) {
+            int result = (*builtin_func[i])(expanded_args);
+            free(expanded_args); // Free memory allocated by expand_wildcards
+            return result;
+        }
+    }
+
+    // Handle redirection
+    if (myShell_execute(expanded_args)) {
+        free(expanded_args); // Free memory allocated by expand_wildcards
+        return 1;
+    }
+
     // If no piping or redirection, launch command normally
-    return myShellLaunch(args);
+    int result = myShellLaunch(expanded_args);
+    free(expanded_args); // Free memory allocated by expand_wildcards
+    return result;
 }
 
 // When myShell is called Interactively
