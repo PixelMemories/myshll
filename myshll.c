@@ -12,6 +12,7 @@ char SHELL_NAME[50] = "myShell";
 int QUIT = 0;
 
 #define MAX_COMMAND_LENGTH 1024
+#define BUFFER_SIZE 4096
 
 // Function to read a line from command into the buffer
 char *readLine() {
@@ -116,7 +117,7 @@ void input_redirection_files(char ** args, int index){
 // Function Declarations
 int myShell_cd(char **args);
 int myShell_exit();
-int myShell_redirect_input_output(char **args);
+int myShell_execute(char **args);
 int myShell_pwd();
 int myShell_which(char **args);
 
@@ -220,10 +221,10 @@ int myShell_which(char **args) {
 
 
 
-int myShell_redirect_input_output(char **args) {
+int myShell_execute(char **args) {
     int i = 0;
-    int redirect_input = 0, redirect_output = 0;
-    char *input_file = NULL, *output_file = NULL;
+    int redirect_input = 0, redirect_output = 0, piping = 0;
+    char *input_file = NULL, *output_file = NULL, *pipe_file_1 = NULL, *pipe_file_2 = NULL;
     char input_buffer[BUFFER_SIZE];
     ssize_t input_buffer_size = 0;
 
@@ -266,11 +267,30 @@ int myShell_redirect_input_output(char **args) {
             }
             output_file = args[i + 1];
             redirect_output = 1;
+        } else if (strcmp(args[i], "|") == 0){
+            if (args[i + 1] == NULL) {
+                printf("Missing command after |\n");
+                return 1;
+            }
+            pipe_file_1 = args[i - 1];
+            pipe_file_2 = args[i + 1];
+
+            piping = 1;
         }
         i++;
     }
 
-    int pid = fork();
+    int pid;
+    int pipefd[2];
+    
+    if (piping) {
+        if (pipe(pipefd) == -1) {
+            perror("pipe");
+            return 1;
+        }
+    }
+
+    pid = fork();
 
     if (pid == 0) {
         // Child process
@@ -284,14 +304,10 @@ int myShell_redirect_input_output(char **args) {
             close(input_fd);
         }
 
-        if (redirect_output) {
-            int output_fd = open(output_file, O_CREAT | O_WRONLY | O_TRUNC, 0666);
-            if (output_fd == -1) {
-                perror("open");
-                exit(EXIT_FAILURE);
-            }
-            dup2(output_fd, STDOUT_FILENO);
-            close(output_fd);
+        if (piping) {
+            close(pipefd[0]); // Close unused read end of the pipe
+            dup2(pipefd[1], STDOUT_FILENO); // Redirect stdout to the write end of the pipe
+            close(pipefd[1]); // Close the write end of the pipe
         }
 
         execvp(args[0], args);
@@ -305,7 +321,58 @@ int myShell_redirect_input_output(char **args) {
         // Inside the parent process
         int status;
         waitpid(pid, &status, 0); // Wait for the child process to complete
-        
+
+        if (piping) {
+            int pid2 = fork();
+            if (pid2 == 0) {
+                // Child process for the second command in the pipeline
+                close(pipefd[1]); // Close unused write end of the pipe
+                dup2(pipefd[0], STDIN_FILENO); // Redirect stdin to the read end of the pipe
+                close(pipefd[0]); // Close the read end of the pipe
+
+                if (redirect_output) {
+                    int output_fd = open(output_file, O_CREAT | O_WRONLY | O_TRUNC, 0666);
+                    if (output_fd == -1) {
+                        perror("open");
+                        exit(EXIT_FAILURE);
+                    }
+                    dup2(output_fd, STDOUT_FILENO);
+                    close(output_fd);
+                }
+
+                char *args2[] = {pipe_file_2, NULL};
+                execvp(args2[0], args2);
+                perror("execvp");
+                exit(EXIT_FAILURE);
+            } else if (pid2 < 0) {
+                perror("fork");
+                return 1;
+            }
+            close(pipefd[0]); // Close the read end of the pipe in the parent process
+            close(pipefd[1]); // Close the write end of the pipe in the parent process
+            waitpid(pid2, &status, 0); // Wait for the second child process to complete
+        } else if (redirect_output) {
+            int pid3 = fork();
+            if (pid3 == 0) {
+                // Child process for redirecting output to file without piping
+                int output_fd = open(output_file, O_CREAT | O_WRONLY | O_TRUNC, 0666);
+                if (output_fd == -1) {
+                    perror("open");
+                    exit(EXIT_FAILURE);
+                }
+                dup2(output_fd, STDOUT_FILENO);
+                close(output_fd);
+
+                execvp(args[0], args);
+                perror("execvp");
+                exit(EXIT_FAILURE);
+            } else if (pid3 < 0) {
+                perror("fork");
+                return 1;
+            }
+            waitpid(pid3, &status, 0); // Wait for the child process to complete
+        }
+
         // If input redirection is enabled, overwrite the input file with the buffer contents
         if (redirect_input) {
             int input_fd = open(input_file, O_WRONLY | O_TRUNC);
@@ -324,85 +391,6 @@ int myShell_redirect_input_output(char **args) {
     }
 
     return 0;
-}
-
-
-// Function to check for pipes and execute accordingly
-int myShell_pipe(char **args) {
-    int pipefd[2]; // file descriptors for the pipe
-    int pipe_pos = -1; // Position of the pipe character in args
-    pid_t pid1, pid2;
-
-    // Find the position of the pipe character, if present
-    for (int i = 0; args[i] != NULL; i++) {
-        if (strcmp(args[i], "|") == 0) {
-            pipe_pos = i;
-            break;
-        }
-    }
-
-    // No pipe found, return indicating that no pipe handling is necessary
-    if (pipe_pos == -1) {
-        return 0;
-    }
-
-    // Create a pipe
-    if (pipe(pipefd) == -1) {
-        perror("pipe");
-        exit(EXIT_FAILURE);
-    }
-
-    // Fork the first child process
-    pid1 = fork();
-    if (pid1 == -1) {
-        perror("fork");
-        exit(EXIT_FAILURE);
-    }
-
-    if (pid1 == 0) {
-        // Child process 1: executes the command before the pipe
-        // Redirect stdout to the write end of the pipe
-        dup2(pipefd[1], STDOUT_FILENO);
-        close(pipefd[0]); // Close unused read end
-        close(pipefd[1]); // Close write end after dup2
-
-        // Null-terminate the args array at the position of the pipe
-        args[pipe_pos] = NULL;
-        execvp(args[0], args);
-        perror("execvp");
-        exit(EXIT_FAILURE);
-    }
-
-    // Fork the second child process
-    pid2 = fork();
-    if (pid2 == -1) {
-        perror("fork");
-        exit(EXIT_FAILURE);
-    }
-
-    if (pid2 == 0) {
-        // Child process 2: executes the command after the pipe
-        // Redirect stdin to the read end of the pipe
-        dup2(pipefd[0], STDIN_FILENO);
-        close(pipefd[1]); // Close unused write end
-        close(pipefd[0]); // Close read end after dup2
-
-        // Execute the command following the pipe
-        execvp(args[pipe_pos + 1], &args[pipe_pos + 1]);
-        perror("execvp");
-        exit(EXIT_FAILURE);
-    }
-
-    // Close pipe ends in the parent
-    close(pipefd[0]);
-    close(pipefd[1]);
-
-    // Wait for both child processes to complete
-    waitpid(pid1, NULL, 0);
-    waitpid(pid2, NULL, 0);
-
-    // Return indicating that pipe handling was done
-    return 1;
 }
 
 int match(const char *pattern, const char *filename) {
@@ -472,10 +460,7 @@ int execShell(char **args) {
     if (args[0] == NULL) {
         return 1;
     }
-    // Handle piping
-    if (myShell_pipe(args)) {
-        return 1; // Pipe handled
-    }
+    
     // Loop to check for builtin functions
     for (int i = 0; i < numBuiltin(); i++) {
         if (strcmp(args[0], builtin_cmd[i]) == 0) {
@@ -483,7 +468,7 @@ int execShell(char **args) {
         }
     }
     // Handle redirection
-    if (myShell_redirect_input_output(args)) {
+    if (myShell_execute(args)) {
         return 1;
     }
     // Handle Wildcards
