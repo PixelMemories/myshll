@@ -238,37 +238,6 @@ int myShell_execute(char **args) {
             }
             input_file = args[i+1];
             redirect_input = 1;
-            
-            // Check for wildcard in input file
-            glob_t glob_result;
-            glob(input_file, GLOB_TILDE, NULL, &glob_result);
-            if (glob_result.gl_pathc > 0) {
-                input_file = glob_result.gl_pathv[0];
-            }
-            globfree(&glob_result);
-
-            // Read the contents of the input file into the buffer
-            int input_fd = open(input_file, O_RDONLY);
-            if (input_fd == -1) {
-                perror("open");
-                return 1;
-            }
-            ssize_t bytes_read;
-            while ((bytes_read = read(input_fd, input_buffer + input_buffer_size, BUFFER_SIZE - input_buffer_size)) > 0) {
-                input_buffer_size += bytes_read;
-                if (input_buffer_size >= BUFFER_SIZE) {
-                    printf("Input file too large to handle\n");
-                    close(input_fd);
-                    return 1;
-                }
-            }
-            close(input_fd);
-            if (bytes_read == -1) {
-                perror("read");
-                return 1;
-            }
-
-            input_redirection_files(args, i+1);
         } else if (strcmp(args[i], ">") == 0) {
             if (args[i + 1] == NULL) {
                 printf("Missing filename after >\n");
@@ -276,14 +245,6 @@ int myShell_execute(char **args) {
             }
             output_file = args[i + 1];
             redirect_output = 1;
-            
-            // Check for wildcard in output file
-            glob_t glob_result;
-            glob(output_file, GLOB_TILDE, NULL, &glob_result);
-            if (glob_result.gl_pathc > 0) {
-                output_file = glob_result.gl_pathv[0];
-            }
-            globfree(&glob_result);
         } else if (strcmp(args[i], "|") == 0){
             if (args[i + 1] == NULL) {
                 printf("Missing command after |\n");
@@ -295,6 +256,25 @@ int myShell_execute(char **args) {
             piping = 1;
         }
         i++;
+    }
+
+    // Wildcard expansion for input file
+    glob_t glob_result;
+    if (redirect_input) {
+        glob(input_file, GLOB_TILDE, NULL, &glob_result);
+        if (glob_result.gl_pathc > 0) {
+            input_file = glob_result.gl_pathv[0];
+        }
+        globfree(&glob_result);
+    }
+
+    // Wildcard expansion for output file
+    if (redirect_output) {
+        glob(output_file, GLOB_TILDE, NULL, &glob_result);
+        if (glob_result.gl_pathc > 0) {
+            output_file = glob_result.gl_pathv[0];
+        }
+        globfree(&glob_result);
     }
 
     int pid;
