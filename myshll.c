@@ -361,6 +361,7 @@ int expand_wildcards(char **args) {
         }
     }
     closedir(dir);
+    printf("I got here\n");
     return 1;
 }
 
