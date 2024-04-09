@@ -512,12 +512,12 @@ int myShellInteract() {
         line = readLine();
         args = splitLine(line);
         //Do Shell
-        if (args[0] == "then" && LastComStat == 0){
+        if (strcmp(args[0], "then") == 0 && LastComStat == 0){
             printf("nope\n");
-        } else if (args[0] == "else" && LastComStat == 1){
+        } else if (strcmp(args[0], "else") == 0 && LastComStat == 1){
             printf("nope\n");
-        } else if (args[0] == "then" || args[0] == "else"){
-            execShell(*(args+1));
+        } else if (strcmp(args[0], "then") == 0 || strcmp(args[0], "else") == 0){
+            execShell(args + 1);
         } else {
             execShell(args);
         }
