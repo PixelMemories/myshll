@@ -272,7 +272,7 @@ void execute_command(char *args[]) {
             arg_count++;
         }
     }
-
+    printf("I GOT INSIDE\n");
     if ((pid = fork()) == 0) { // Child process
         execvp(args[0], args);
         perror("execvp");
@@ -295,6 +295,7 @@ int myShellInteract() {
         line = readLine();
         args = splitLine(line);
         execute_command(args);
+        printf("I GOT HERE \n");
         free(line);
         free(args);
     }
