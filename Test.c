@@ -236,7 +236,7 @@ int myShell_execute(char **args) {
         if (strcmp(args[i], "<") == 0) {
             if (args[i + 1] == NULL) {
                 printf("Missing filename after <\n");
-                return;
+                return 0;
             }
             input_file = args[i+1];
             redirect_input = 1;
