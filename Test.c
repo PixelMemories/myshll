@@ -264,6 +264,7 @@ int myShell_execute(char **args) {
         glob(input_file, GLOB_TILDE | GLOB_ERR, NULL, &glob_result);
         if (glob_result.gl_pathc > 0) {
             input_file = glob_result.gl_pathv[0];
+            printf("in: %s\n", input_file);
         } else {
             printf("Wildcard pattern for input file does not match any files.\n");
             return 1;
@@ -276,6 +277,7 @@ int myShell_execute(char **args) {
         glob(output_file, GLOB_TILDE | GLOB_ERR, NULL, &glob_result);
         if (glob_result.gl_pathc > 0) {
             output_file = glob_result.gl_pathv[0];
+            printf("out: %s\n", output_file);
         } else {
             printf("Wildcard pattern for output file does not match any files.\n");
             return 1;
