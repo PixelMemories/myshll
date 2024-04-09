@@ -393,7 +393,7 @@ int myShell_execute(char **args) {
     return 0;
 }
 
-void expand_wildcards(char *tokens[]) {
+char* expand_wildcards(char *tokens[]) {
     glob_t glob_result;
     int i, flags = 0;
 
@@ -406,6 +406,7 @@ void expand_wildcards(char *tokens[]) {
                 // Print out expanded filenames
                 for (int j = 0; j < glob_result.gl_pathc; j++) {
                     printf("%s ", glob_result.gl_pathv[j]);
+                    return glob_result.gl_pathv[j];
                 }
                 // Free memory allocated by glob
                 globfree(&glob_result);
@@ -413,6 +414,7 @@ void expand_wildcards(char *tokens[]) {
         } else {
             // No wildcards, just print the token as is
             printf("%s ", tokens[i]);
+            return tokens[i];
         }
     }
     printf("\n");
