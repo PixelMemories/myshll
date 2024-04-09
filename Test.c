@@ -1,4 +1,3 @@
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -86,16 +85,34 @@ void execute_builtin_command(char *args[]) {
     }
 }
 
-void execute_command(char *command) {
-    char *commands[MAX_COMMANDS];
+void tokenize_input(char *input, char *tokens[]) {
+    char *token;
     int i = 0;
 
-    commands[i] = strtok(command, "|");
-    while (commands[i] != NULL && i < MAX_COMMANDS - 1) {
-        i++;
-        commands[i] = strtok(NULL, "|");
+    token = strtok(input, " \t\n");
+    while (token != NULL && i < MAX_ARGS - 1) {
+        tokens[i++] = token;
+        token = strtok(NULL, " \t\n");
     }
-    commands[i] = NULL;
+    tokens[i] = NULL;
+}
+
+void execute_command(char *command) {
+    char *commands[MAX_COMMANDS];
+    char *tokens[MAX_ARGS];
+    int i = 0;
+
+    tokenize_input(command, tokens);
+
+    commands[i] = tokens[0];
+    for (int j = 1; tokens[j] != NULL; j++) {
+        if (strcmp(tokens[j], "|") == 0) {
+            commands[++i] = NULL;
+        } else {
+            commands[i] = tokens[j];
+        }
+    }
+    commands[++i] = NULL;
 
     if (commands[0] == NULL) {
         return;
@@ -105,24 +122,16 @@ void execute_command(char *command) {
     int fd_in = 0; // File descriptor for input
 
     for (i = 0; commands[i] != NULL; i++) {
-        char *args[MAX_ARGS];
         int j = 0;
 
-        args[j] = strtok(commands[i], " \t\n");
-        while (args[j] != NULL && j < MAX_ARGS - 1) {
-            j++;
-            args[j] = strtok(NULL, " \t\n");
-        }
-        args[j] = NULL;
-
-        for (j = 0; args[j] != NULL; j++) {
+        for (j = 0; commands[j] != NULL; j++) {
             glob_t globbuf;
             memset(&globbuf, 0, sizeof(glob_t));
-            if (strchr(args[j], '*') != NULL || strchr(args[j], '?') != NULL) {
-                if (glob(args[j], GLOB_NOCHECK | GLOB_TILDE, NULL, &globbuf) == 0) {
+            if (strchr(commands[j], '*') != NULL || strchr(commands[j], '?') != NULL) {
+                if (glob(commands[j], GLOB_NOCHECK | GLOB_TILDE, NULL, &globbuf) == 0) {
                     for (int k = 0; k < globbuf.gl_pathc; k++) {
-                        args[j] = globbuf.gl_pathv[k];
-                        execute_builtin_command(args);
+                        commands[j] = globbuf.gl_pathv[k];
+                        execute_builtin_command(commands);
                     }
                     globfree(&globbuf);
                 }
@@ -148,10 +157,10 @@ void execute_command(char *command) {
                 // Last command
                 dup2(fd_in, 0); // Redirect input from the read end of the previous pipe
                 // Check for output redirection
-                for (j = 0; args[j] != NULL; j++) {
-                    if (strcmp(args[j], ">") == 0) {
-                        args[j] = NULL;
-                        int fd_out = open(args[j + 1], O_WRONLY | O_CREAT | O_TRUNC, 0640);
+                for (j = 0; commands[j] != NULL; j++) {
+                    if (strcmp(commands[j], ">") == 0) {
+                        commands[j] = NULL;
+                        int fd_out = open(commands[j + 1], O_WRONLY | O_CREAT | O_TRUNC, 0640);
                         if (fd_out == -1) {
                             perror("open");
                             exit(EXIT_FAILURE);
@@ -166,8 +175,8 @@ void execute_command(char *command) {
                 close(pipes[k][0]);
                 close(pipes[k][1]);
             }
-            execute_builtin_command(args);
-            execvp(args[0], args);
+            execute_builtin_command(commands);
+            execvp(commands[0], commands);
             perror("execvp");
             exit(EXIT_FAILURE);
         } else if (pid < 0) {
@@ -208,4 +217,3 @@ int main() {
     }
 
     return 0;
-}
