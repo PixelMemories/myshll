@@ -514,8 +514,10 @@ int myShellInteract() {
         //Do Shell
         if (strcmp(args[0], "then") == 0 && LastComStat == 1){
             printf("nope\n");
+            LastComStat = 0;
         } else if (strcmp(args[0], "else") == 0 && LastComStat == 0){
             printf("nope\n");
+            LastComStat = 0;
         } else if (strcmp(args[0], "then") == 0 || strcmp(args[0], "else") == 0){
             execShell(args + 1);
         } else {
