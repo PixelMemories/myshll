@@ -408,9 +408,7 @@ int execShell(char **args) {
         return 1;
     }
     // Handle Wildcards
-    if (expand_wildcards(args)){
-        return 1;
-    }
+    expand_wildcards(args);
     
     // If no piping or redirection, launch command normally
     return myShellLaunch(args);
