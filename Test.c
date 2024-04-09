@@ -176,6 +176,45 @@ int myShell_which(char **args) {
     return 1;
 }
 
+int myShellLaunch(char **args) {
+    pid_t pid, wpid;
+    int status;
+    pid = fork();
+    if (pid == 0) {
+        // The Child Process
+        if (execvp(args[0], args) == -1) {
+            perror("myShell: ");
+            exit(EXIT_FAILURE);
+        }
+        exit(EXIT_SUCCESS);
+    } else if (pid < 0) {
+        // Forking Error
+        perror("myShell: ");
+    } else {
+        // The Parent Process
+        do {
+            wpid = waitpid(pid, &status, WUNTRACED);
+        } while (!WIFEXITED(status) && !WIFSIGNALED(status));
+    }
+    return 1;
+}
+
+// Function to execute command from terminal
+int execShell(char **args) {
+    if (args[0] == NULL) {
+        return 1;
+    }
+    // Loop to check for builtin functions
+    for (int i = 0; i < numBuiltin(); i++) {
+        if (strcmp(args[0], builtin_cmd[i]) == 0) {
+            return (*builtin_func[i])(args);
+        }
+    }
+    // Handle redirection
+    
+    // If no piping or redirection, launch command normally
+    return myShellLaunch(args);
+}
 
 void execute_command(char *args[]) {
     int arg_count = 0;
@@ -243,46 +282,6 @@ void execute_command(char *args[]) {
     }
 }
 
-
-int myShellLaunch(char **args) {
-    pid_t pid, wpid;
-    int status;
-    pid = fork();
-    if (pid == 0) {
-        // The Child Process
-        if (execvp(args[0], args) == -1) {
-            perror("myShell: ");
-            exit(EXIT_FAILURE);
-        }
-        exit(EXIT_SUCCESS);
-    } else if (pid < 0) {
-        // Forking Error
-        perror("myShell: ");
-    } else {
-        // The Parent Process
-        do {
-            wpid = waitpid(pid, &status, WUNTRACED);
-        } while (!WIFEXITED(status) && !WIFSIGNALED(status));
-    }
-    return 1;
-}
-
-// Function to execute command from terminal
-int execShell(char **args) {
-    if (args[0] == NULL) {
-        return 1;
-    }
-    // Loop to check for builtin functions
-    for (int i = 0; i < numBuiltin(); i++) {
-        if (strcmp(args[0], builtin_cmd[i]) == 0) {
-            return (*builtin_func[i])(args);
-        }
-    }
-    // Handle redirection
-    
-    // If no piping or redirection, launch command normally
-    return myShellLaunch(args);
-}
 
 // When myShell is called Interactively
 int myShellInteract() {
