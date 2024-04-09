@@ -485,7 +485,7 @@ int execShell(char **args) {
     expand_wildcards(args);
     
     // Handle redirection
-    if (myShell_execute(expArgs)) {
+    if (myShell_execute(args)) {
         return 1;
     }
     
