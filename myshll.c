@@ -323,6 +323,44 @@ int myShell_pipe(char **args) {
     return 1;
 }
 
+int match(const char *pattern, const char *filename) {
+    while (*pattern && *filename) {
+        if (*pattern == '*') {
+            while (*filename) {
+                if (match(pattern + 1, filename))
+                    return 1;
+                filename++;
+            }
+            return *pattern == '\0';
+        } else if (*pattern != '?' && *pattern != *filename) {
+            return 0;
+        }
+        pattern++;
+        filename++;
+    }
+    return !*pattern && !*filename;
+}
+
+int expand_wildcards(char **args) {
+    struct dirent *entry;
+    DIR *dir = opendir(".");
+    if (dir == NULL) {
+        perror("opendir");
+        return;
+    }
+    while ((entry = readdir(dir)) != NULL) {
+        for (int i = 1; args[i] != NULL; i++) {
+            if (strchr(args[i], '*') != NULL) {
+                if (match(args[i], entry->d_name)) {
+                    args[i] = strdup(entry->d_name);
+                }
+            }
+        }
+    }
+    closedir(dir);
+    return 1;
+}
+
 int myShellLaunch(char **args) {
     pid_t pid, wpid;
     int status;
@@ -365,6 +403,11 @@ int execShell(char **args) {
     if (myShell_redirect_input_output(args)) {
         return 1;
     }
+    // Handle Wildcards
+    if (expand_wildcards(args)){
+        return 1;
+    }
+    
     // If no piping or redirection, launch command normally
     return myShellLaunch(args);
 }
