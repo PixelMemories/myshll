@@ -494,6 +494,7 @@ int execShell(char **args) {
     // Handle redirection
     if (myShell_execute(expanded_args)) {
         free(expanded_args); // Free memory allocated by expand_wildcards
+        LastComStat = 1;
         return 1;
     }
 
@@ -512,10 +513,10 @@ int myShellInteract() {
         line = readLine();
         args = splitLine(line);
         //Do Shell
-        if (strcmp(args[0], "then") == 0 && LastComStat == 1){
+        if (strcmp(args[0], "then") == 0 && LastComStat == 0){
             printf("nope\n");
             LastComStat = 0;
-        } else if (strcmp(args[0], "else") == 0 && LastComStat == 0){
+        } else if (strcmp(args[0], "else") == 0 && LastComStat == 1){
             printf("nope\n");
             LastComStat = 0;
         } else if (strcmp(args[0], "then") == 0 || strcmp(args[0], "else") == 0){
