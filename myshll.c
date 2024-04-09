@@ -448,15 +448,17 @@ int execShell(char **args) {
     if (args[0] == NULL) {
         return 1;
     }
-    expand_wildcards(args);
+    
     // Loop to check for builtin functions
     for (int i = 0; i < numBuiltin(); i++) {
         if (strcmp(args[0], builtin_cmd[i]) == 0) {
             return (*builtin_func[i])(args);
         }
     }
+    char** expArgs = expand_wildcards(args);
+    
     // Handle redirection
-    if (myShell_execute(args)) {
+    if (myShell_execute(expArgs)) {
         return 1;
     }
     
