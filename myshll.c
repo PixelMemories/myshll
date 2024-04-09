@@ -393,31 +393,58 @@ int myShell_execute(char **args) {
     return 0;
 }
 
-char** expand_wildcards(char *tokens[]) {
+void expand_wildcards(char *tokens[]) {
     glob_t glob_result;
-    int i, flags = 0;
+    int i, j, flags = 0;
+    char **expanded_tokens = NULL;
 
-    // Iterate over tokens until NULL is encountered
+    // Count number of expanded tokens
+    int num_expanded_tokens = 0;
     for (i = 0; tokens[i] != NULL; i++) {
-        // If the token contains wildcard characters
         if (strchr(tokens[i], '*') != NULL || strchr(tokens[i], '?') != NULL) {
-            // Use glob to expand the wildcard pattern
             if (glob(tokens[i], flags, NULL, &glob_result) == 0) {
-                // Print out expanded filenames
-                for (int j = 0; j < glob_result.gl_pathc; j++) {
-                    printf("%s ", glob_result.gl_pathv[j]);
-                    return glob_result.gl_pathv[j];
-                }
-                // Free memory allocated by glob
+                num_expanded_tokens += glob_result.gl_pathc;
                 globfree(&glob_result);
             }
         } else {
-            // No wildcards, just print the token as is
-            printf("%s ", tokens[i]);
-            return tokens[i];
+            num_expanded_tokens++;
         }
     }
-    printf("\n");
+
+    // Allocate memory for expanded tokens
+    expanded_tokens = malloc((num_expanded_tokens + 1) * sizeof(char *));
+    if (expanded_tokens == NULL) {
+        fprintf(stderr, "Memory allocation failed\n");
+        exit(EXIT_FAILURE);
+    }
+
+    // Expand wildcards and store in expanded_tokens
+    int k = 0;
+    for (i = 0; tokens[i] != NULL; i++) {
+        if (strchr(tokens[i], '*') != NULL || strchr(tokens[i], '?') != NULL) {
+            if (glob(tokens[i], flags, NULL, &glob_result) == 0) {
+                for (j = 0; j < glob_result.gl_pathc; j++) {
+                    expanded_tokens[k++] = strdup(glob_result.gl_pathv[j]);
+                }
+                globfree(&glob_result);
+            }
+        } else {
+            expanded_tokens[k++] = strdup(tokens[i]);
+        }
+    }
+    expanded_tokens[k] = NULL;
+
+    // Free original tokens and update with expanded tokens
+    for (i = 0; tokens[i] != NULL; i++) {
+        free(tokens[i]);
+    }
+    for (i = 0; expanded_tokens[i] != NULL; i++) {
+        tokens[i] = expanded_tokens[i];
+    }
+    tokens[i] = NULL;
+
+    // Free memory allocated for expanded_tokens
+    free(expanded_tokens);
 }
 
 int myShellLaunch(char **args) {
@@ -455,7 +482,7 @@ int execShell(char **args) {
             return (*builtin_func[i])(args);
         }
     }
-    char** expArgs = expand_wildcards(args);
+    expand_wildcards(args);
     
     // Handle redirection
     if (myShell_execute(expArgs)) {
