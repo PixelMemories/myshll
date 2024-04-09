@@ -519,7 +519,7 @@ int myShellInteract() {
         } else if (args[0] == "else" && LastComStat == 1){
             printf("nope\n");
         } else {
-            execShell(args);
+            execShell(args[1]);
         }
         free(line);
         free(args);
