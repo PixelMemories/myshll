@@ -10,6 +10,7 @@
 
 char SHELL_NAME[50] = "myShell";
 int QUIT = 0;
+int LastComStat = 0;
 
 #define MAX_COMMAND_LENGTH 1024
 #define BUFFER_SIZE 4096
@@ -455,8 +456,10 @@ int myShellLaunch(char **args) {
         if (execvp(args[0], args) == -1) {
             perror("myShell: ");
             exit(EXIT_FAILURE);
+            LastComStat = 0;
         }
         exit(EXIT_SUCCESS);
+        LastComStat = 1;
     } else if (pid < 0) {
         // Forking Error
         perror("myShell: ");
@@ -479,6 +482,14 @@ int execShell(char **args) {
         return 1;
     }
 
+    if (expanded_args[0] == "then" && LastComStat == 0){
+        return 1;
+    }
+
+    if (expanded_args[0] == "else" && LastComStat == 1){
+        return 1;
+    }
+    
     // Loop to check for builtin functions
     for (int i = 0; i < numBuiltin(); i++) {
         if (strcmp(expanded_args[0], builtin_cmd[i]) == 0) {
