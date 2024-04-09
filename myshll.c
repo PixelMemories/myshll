@@ -349,7 +349,7 @@ int expand_wildcards(char **args) {
     DIR *dir = opendir(".");
     if (dir == NULL) {
         perror("opendir");
-        return;
+        return 0;
     }
     while ((entry = readdir(dir)) != NULL) {
         for (int i = 1; args[i] != NULL; i++) {
