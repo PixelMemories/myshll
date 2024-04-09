@@ -455,7 +455,7 @@ int execShell(char **args) {
             return (*builtin_func[i])(args);
         }
     }
-    char** expArgs = expand_wildcards(args);
+    char* expArgs = expand_wildcards(args);
     
     // Handle redirection
     if (myShell_execute(expArgs)) {
