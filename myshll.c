@@ -393,43 +393,29 @@ int myShell_execute(char **args) {
     return 0;
 }
 
-int match(const char *pattern, const char *filename) {
-    while (*pattern && *filename) {
-        if (*pattern == '*') {
-            while (*filename) {
-                if (match(pattern + 1, filename))
-                    return 1;
-                filename++;
-            }
-            return *pattern == '\0';
-        } else if (*pattern != '?' && *pattern != *filename) {
-            return 0;
-        }
-        pattern++;
-        filename++;
-    }
-    return !*pattern && !*filename;
-}
+void expand_wildcards(char *tokens[]) {
+    glob_t glob_result;
+    int i, flags = 0;
 
-int expand_wildcards(char **args) {
-    struct dirent *entry;
-    DIR *dir = opendir(".");
-    if (dir == NULL) {
-        perror("opendir");
-        return 0;
-    }
-    while ((entry = readdir(dir)) != NULL) {
-        for (int i = 1; args[i] != NULL; i++) {
-            if (strchr(args[i], '*') != NULL) {
-                if (match(args[i], entry->d_name)) {
-                    args[i] = strdup(entry->d_name);
+    // Iterate over tokens until NULL is encountered
+    for (i = 0; tokens[i] != NULL; i++) {
+        // If the token contains wildcard characters
+        if (strchr(tokens[i], '*') != NULL || strchr(tokens[i], '?') != NULL) {
+            // Use glob to expand the wildcard pattern
+            if (glob(tokens[i], flags, NULL, &glob_result) == 0) {
+                // Print out expanded filenames
+                for (int j = 0; j < glob_result.gl_pathc; j++) {
+                    printf("%s ", glob_result.gl_pathv[j]);
                 }
+                // Free memory allocated by glob
+                globfree(&glob_result);
             }
+        } else {
+            // No wildcards, just print the token as is
+            printf("%s ", tokens[i]);
         }
     }
-    closedir(dir);
-    printf("I got here\n");
-    return 1;
+    printf("\n");
 }
 
 int myShellLaunch(char **args) {
@@ -460,7 +446,7 @@ int execShell(char **args) {
     if (args[0] == NULL) {
         return 1;
     }
-    
+    expand_wildcards(args);
     // Loop to check for builtin functions
     for (int i = 0; i < numBuiltin(); i++) {
         if (strcmp(args[0], builtin_cmd[i]) == 0) {
@@ -469,10 +455,6 @@ int execShell(char **args) {
     }
     // Handle redirection
     if (myShell_execute(args)) {
-        return 1;
-    }
-    // Handle Wildcards
-    if (expand_wildcards(args)){
         return 1;
     }
     
