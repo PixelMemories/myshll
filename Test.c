@@ -481,28 +481,39 @@ int execShell(char **args) {
     if (expanded_args == NULL) {
         return 1;
     }
-
     
+    // Skip first token if it's "else" or "then"
+    int start_index = 0;
+    if (strcmp(expanded_args[0], "else") == 0 || strcmp(expanded_args[0], "then") == 0) {
+        start_index = 1;
+    }
     
-    // Loop to check for builtin functions
-    for (int i = 0; i < numBuiltin(); i++) {
-        if (strcmp(expanded_args[0], builtin_cmd[i]) == 0) {
-            int result = (*builtin_func[i])(expanded_args);
+    // Loop to check for builtin functions, starting from index 1 if "else" or "then" is the first token
+    for (int i = start_index; i < numBuiltin(); i++) {
+        if (strcmp(expanded_args[i], builtin_cmd[i]) == 0) {
+            int result = (*builtin_func[i])(expanded_args + i);
             free(expanded_args); // Free memory allocated by expand_wildcards
             return result;
         }
     }
 
-    // Handle redirection
-    if (myShell_execute(expanded_args)) {
-        free(expanded_args); // Free memory allocated by expand_wildcards
-        return 1;
+    // Handle redirection, skip first token if it's "else" or "then"
+    if (strcmp(expanded_args[start_index], "else") != 0 && strcmp(expanded_args[start_index], "then") != 0) {
+        if (myShell_execute(expanded_args + start_index)) {
+            free(expanded_args); // Free memory allocated by expand_wildcards
+            return 1;
+        }
     }
 
-    // If no piping or redirection, launch command normally
-    int result = myShellLaunch(expanded_args);
+    // If no piping or redirection, launch command normally, skip first token if it's "else" or "then"
+    if (strcmp(expanded_args[start_index], "else") != 0 && strcmp(expanded_args[start_index], "then") != 0) {
+        int result = myShellLaunch(expanded_args + start_index);
+        free(expanded_args); // Free memory allocated by expand_wildcards
+        return result;
+    }
+
     free(expanded_args); // Free memory allocated by expand_wildcards
-    return result;
+    return 0; // Return success if "else" or "then" is the first token
 }
 
 // When myShell is called Interactively
@@ -519,7 +530,7 @@ int myShellInteract() {
         } else if (args[0] == "else" && LastComStat == 1){
             printf("nope\n");
         } else {
-            execShell(args*[1]);
+            execShell(args);
         }
         free(line);
         free(args);
