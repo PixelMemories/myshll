@@ -251,7 +251,14 @@ void execute_command(char *args[]) {
                 dup2(pipe_fd[0], STDIN_FILENO);
                 close(pipe_fd[0]);
             }
-            arg_count++; // Move to the next command
+            
+            // Move to the next command after the pipe
+            while (args[arg_count] != NULL) {
+                arg_count++;
+                if (strcmp(args[arg_count], "|") != 0) {
+                    break;
+                }
+            }
         } else if (strcmp(args[arg_count], ">") == 0) { // Handle redirect output
             char *filename = args[arg_count + 1];
             int fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0666);
