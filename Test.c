@@ -183,13 +183,10 @@ void execute_command(char *args[]) {
     pid_t pid;
 
     // Parse command arguments
-    if (args[0] == NULL) {
-        return 1;
-    }
     // Loop to check for builtin functions
     for (int i = 0; i < numBuiltin(); i++) {
         if (strcmp(args[0], builtin_cmd[i]) == 0) {
-            return (*builtin_func[i])(args);
+            execShell(args);
         }
     }
     while (args[arg_count] != NULL) {
