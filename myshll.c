@@ -311,6 +311,20 @@ int myShell_execute(char **args) {
             close(pipefd[1]); // Close the write end of the pipe
         }
 
+        if(redirect_output && !piping){
+            int output_fd = open(output_file, O_CREAT | O_WRONLY | O_TRUNC, 0666);
+            if (output_fd == -1) {
+                perror("open");
+                exit(EXIT_FAILURE);
+            }
+            dup2(output_fd, STDOUT_FILENO);
+            close(output_fd);
+
+            execvp(args[0], args);
+            perror("execvp");
+            exit(EXIT_FAILURE);
+        }
+
         execvp(args[0], args);
         perror("execvp");
         exit(EXIT_FAILURE);
