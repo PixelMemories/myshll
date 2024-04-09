@@ -481,37 +481,6 @@ int execShell(char **args) {
     if (expanded_args == NULL) {
         return 1;
     }
-    
-    if (expanded_args[0]=="then"|| expanded_args[0] == "else"){
-        int num_expanded_args = countArgs(expanded_args);
-        char **new_expanded_args = malloc((num_expanded_args) * sizeof(char *));
-        if (new_expanded_args == NULL) {
-            perror("malloc");
-            exit(EXIT_FAILURE);
-        }
-    
-        // Copy the expanded arguments starting from index 1
-        for (int i = 1; i < num_expanded_args; i++) {
-            new_expanded_args[i - 1] = strdup(expanded_args[i]);
-            if (new_expanded_args[i - 1] == NULL) {
-                perror("strdup");
-                exit(EXIT_FAILURE);
-            }
-        }
-        new_expanded_args[num_expanded_args - 1] = NULL; // Set the last element to NULL
-        }
-    
-        // Copy the expanded arguments starting from index 1
-        for (int i = 1; i < num_expanded_args; i++) {
-            new_expanded_args[i - 1] = strdup(expanded_args[i]);
-            if (new_expanded_args[i - 1] == NULL) {
-                perror("strdup");
-                exit(EXIT_FAILURE);
-            }
-        }
-        new_expanded_args[num_expanded_args - 1] = NULL; // Set the last element to NULL
-        expanded_args = new_expanded_args;
-    }
 
     // Loop to check for builtin functions
     for (int i = 1; i < numBuiltin(); i++) {
@@ -531,8 +500,6 @@ int execShell(char **args) {
     // If no piping or redirection, launch command normally
     int result = myShellLaunch(expanded_args);
     free(expanded_args); // Free memory allocated by expand_wildcards
-    // Free the array itself
-    free(new_expanded_args);
     return result;
 }
 
