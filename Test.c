@@ -1,14 +1,12 @@
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
 #include <string.h>
-#include <fcntl.h>
-#include <sys/wait.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <glob.h>
 #include <dirent.h>
-
+#include <sys/types.h>
+#include <unistd.h>
+#include <sys/wait.h>
+#include <glob.h>
 
 char SHELL_NAME[50] = "myShell";
 int QUIT = 0;
@@ -222,79 +220,87 @@ int myShell_which(char **args) {
 }
 
 
-int myShell_execute(char **args) {
+
+void execute_command(char **args, int redirect_input, char *input_file, int redirect_output, char *output_file);
+
+void myShell_execute(char **args) {
     int i = 0;
     int redirect_input = 0, redirect_output = 0, piping = 0;
-    char *input_file = NULL, *output_file = NULL, *pipe_file_1 = NULL, *pipe_file_2 = NULL;
-    char input_buffer[BUFFER_SIZE];
-    ssize_t input_buffer_size = 0;
+    char *input_file = NULL, *output_file = NULL;
+    char *pipe_input_files[10] = {NULL}; // Assuming maximum 10 input files for piping
+    char *pipe_output_files[10] = {NULL}; // Assuming maximum 10 output files for piping
+    int pipe_input_count = 0, pipe_output_count = 0;
 
     // Find input and output files
     while (args[i] != NULL) {
         if (strcmp(args[i], "<") == 0) {
             if (args[i + 1] == NULL) {
                 printf("Missing filename after <\n");
-                return 1;
+                return;
             }
             input_file = args[i+1];
             redirect_input = 1;
+            i++;
         } else if (strcmp(args[i], ">") == 0) {
             if (args[i + 1] == NULL) {
                 printf("Missing filename after >\n");
-                return 1;
+                return;
             }
             output_file = args[i + 1];
             redirect_output = 1;
+            i++;
         } else if (strcmp(args[i], "|") == 0){
             if (args[i + 1] == NULL) {
                 printf("Missing command after |\n");
-                return 1;
+                return;
             }
-            pipe_file_1 = args[i - 1];
-            pipe_file_2 = args[i + 1];
-
             piping = 1;
+            i++;
+        } else {
+            if (piping) {
+                pipe_input_files[pipe_input_count++] = args[i];
+            } else {
+                pipe_output_files[pipe_output_count++] = args[i];
+            }
         }
         i++;
     }
 
-    // Wildcard expansion for input file
-    glob_t glob_result;
-    if (redirect_input) {
-        glob(input_file, GLOB_TILDE | GLOB_ERR, NULL, &glob_result);
-        if (glob_result.gl_pathc > 0) {
-            input_file = strdup(glob_result.gl_pathv[0]); // Copying the expanded file path
-        } else {
-            printf("Wildcard pattern for input file does not match any files.\n");
-            return 1;
-        }
-        globfree(&glob_result);
-    }
-
-    // Wildcard expansion for output file
-    if (redirect_output) {
-        glob(output_file, GLOB_TILDE | GLOB_ERR, NULL, &glob_result);
-        if (glob_result.gl_pathc > 0) {
-            output_file = strdup(glob_result.gl_pathv[0]); // Copying the expanded file path
-        } else {
-            printf("Wildcard pattern for output file does not match any files.\n");
-            return 1;
-        }
-        globfree(&glob_result);
-    }
-
-    int pid;
-    int pipefd[2];
-    
     if (piping) {
+        int pid;
+        int pipefd[2];
         if (pipe(pipefd) == -1) {
             perror("pipe");
-            return 1;
+            return;
         }
+
+        pid = fork();
+        if (pid == 0) {
+            // Child process
+            close(pipefd[0]); // Close unused read end of the pipe
+            dup2(pipefd[1], STDOUT_FILENO); // Redirect stdout to the write end of the pipe
+            close(pipefd[1]); // Close the write end of the pipe
+
+            execute_command(pipe_output_files, redirect_input, input_file, 0, NULL);
+        } else if (pid < 0) {
+            // Forking Error
+            perror("fork");
+            return;
+        }
+
+        // Parent process
+        close(pipefd[1]); // Close the write end of the pipe
+        dup2(pipefd[0], STDIN_FILENO); // Redirect stdin to the read end of the pipe
+        close(pipefd[0]); // Close the read end of the pipe
+
+        execute_command(pipe_input_files, 0, NULL, redirect_output, output_file);
+    } else {
+        execute_command(args, redirect_input, input_file, redirect_output, output_file);
     }
+}
 
-    pid = fork();
-
+void execute_command(char **args, int redirect_input, char *input_file, int redirect_output, char *output_file) {
+    int pid = fork();
     if (pid == 0) {
         // Child process
         if (redirect_input) {
@@ -307,10 +313,14 @@ int myShell_execute(char **args) {
             close(input_fd);
         }
 
-        if (piping) {
-            close(pipefd[0]); // Close unused read end of the pipe
-            dup2(pipefd[1], STDOUT_FILENO); // Redirect stdout to the write end of the pipe
-            close(pipefd[1]); // Close the write end of the pipe
+        if (redirect_output) {
+            int output_fd = open(output_file, O_CREAT | O_WRONLY | O_TRUNC, 0666);
+            if (output_fd == -1) {
+                perror("open");
+                exit(EXIT_FAILURE);
+            }
+            dup2(output_fd, STDOUT_FILENO);
+            close(output_fd);
         }
 
         execvp(args[0], args);
@@ -319,120 +329,65 @@ int myShell_execute(char **args) {
     } else if (pid < 0) {
         // Forking Error
         perror("fork");
-        return 1;
+        exit(EXIT_FAILURE);
     } else {
-        // Inside the parent process
+        // Parent process
         int status;
         waitpid(pid, &status, 0); // Wait for the child process to complete
+    }
+}
 
-        if (piping) {
-            int pid2 = fork();
-            if (pid2 == 0) {
-                // Child process for the second command in the pipeline
-                close(pipefd[1]); // Close unused write end of the pipe
-                dup2(pipefd[0], STDIN_FILENO); // Redirect stdin to the read end of the pipe
-                close(pipefd[0]); // Close the read end of the pipe
+char **expand_wildcards(char *tokens[]) {
+    glob_t glob_result;
+    int i, flags = 0;
+    char **expanded_strings = NULL;
+    size_t num_strings = 0;
 
-                if (redirect_output) {
-                    int output_fd = open(output_file, O_CREAT | O_WRONLY | O_TRUNC, 0666);
-                    if (output_fd == -1) {
-                        perror("open");
-                        exit(EXIT_FAILURE);
+    // Iterate over tokens until NULL is encountered
+    for (i = 0; tokens[i] != NULL; i++) {
+        // If the token contains wildcard characters
+        if (strchr(tokens[i], '*') != NULL || strchr(tokens[i], '?') != NULL) {
+            // Use glob to expand the wildcard pattern
+            if (glob(tokens[i], flags, NULL, &glob_result) == 0) {
+                // Allocate memory for expanded strings
+                expanded_strings = (char **)realloc(expanded_strings, (num_strings + glob_result.gl_pathc) * sizeof(char *));
+                if (expanded_strings == NULL) {
+                    perror("Memory allocation failed");
+                    return NULL;
+                }
+                // Copy expanded filenames
+                for (int j = 0; j < glob_result.gl_pathc; j++) {
+                    expanded_strings[num_strings++] = strdup(glob_result.gl_pathv[j]);
+                    if (expanded_strings[num_strings - 1] == NULL) {
+                        perror("Memory allocation failed");
+                        return NULL;
                     }
-                    dup2(output_fd, STDOUT_FILENO);
-                    close(output_fd);
                 }
-
-                char *args2[] = {pipe_file_2, NULL};
-                execvp(args2[0], args2);
-                perror("execvp");
-                exit(EXIT_FAILURE);
-            } else if (pid2 < 0) {
-                perror("fork");
-                return 1;
+                // Free memory allocated by glob
+                globfree(&glob_result);
             }
-            close(pipefd[0]); // Close the read end of the pipe in the parent process
-            close(pipefd[1]); // Close the write end of the pipe in the parent process
-            waitpid(pid2, &status, 0); // Wait for the second child process to complete
-        } else if (redirect_output) {
-            int pid3 = fork();
-            if (pid3 == 0) {
-                // Child process for redirecting output to file without piping
-                int output_fd = open(output_file, O_CREAT | O_WRONLY | O_TRUNC, 0666);
-                if (output_fd == -1) {
-                    perror("open");
-                    exit(EXIT_FAILURE);
-                }
-                dup2(output_fd, STDOUT_FILENO);
-                close(output_fd);
-
-                execvp(args[0], args);
-                perror("execvp");
-                exit(EXIT_FAILURE);
-            } else if (pid3 < 0) {
-                perror("fork");
-                return 1;
+        } else {
+            // No wildcards, just copy the token
+            expanded_strings = (char **)realloc(expanded_strings, (num_strings + 1) * sizeof(char *));
+            if (expanded_strings == NULL) {
+                perror("Memory allocation failed");
+                return NULL;
             }
-            waitpid(pid3, &status, 0); // Wait for the child process to complete
-        }
-
-        // If input redirection is enabled, overwrite the input file with the buffer contents
-        if (redirect_input) {
-            int input_fd = open(input_file, O_WRONLY | O_TRUNC);
-            if (input_fd == -1) {
-                perror("open");
-                return 1;
-            }
-            if (write(input_fd, input_buffer, input_buffer_size) == -1) {
-                perror("write");
-                return 1;
-            }
-            close(input_fd);
-        }
-
-        return 1;
-    }
-
-    return 0;
-}
-
-int match(const char *pattern, const char *filename) {
-    while (*pattern && *filename) {
-        if (*pattern == '*') {
-            while (*filename) {
-                if (match(pattern + 1, filename))
-                    return 1;
-                filename++;
-            }
-            return *pattern == '\0';
-        } else if (*pattern != '?' && *pattern != *filename) {
-            return 0;
-        }
-        pattern++;
-        filename++;
-    }
-    return !*pattern && !*filename;
-}
-
-int expand_wildcards(char **args) {
-    struct dirent *entry;
-    DIR *dir = opendir(".");
-    if (dir == NULL) {
-        perror("opendir");
-        return 0;
-    }
-    while ((entry = readdir(dir)) != NULL) {
-        for (int i = 1; args[i] != NULL; i++) {
-            if (strchr(args[i], '*') != NULL) {
-                if (match(args[i], entry->d_name)) {
-                    args[i] = strdup(entry->d_name);
-                }
+            expanded_strings[num_strings++] = strdup(tokens[i]);
+            if (expanded_strings[num_strings - 1] == NULL) {
+                perror("Memory allocation failed");
+                return NULL;
             }
         }
     }
-    closedir(dir);
-    printf("I got here\n");
-    return 1;
+    // Add a NULL terminator to the expanded strings array
+    expanded_strings = (char **)realloc(expanded_strings, (num_strings + 1) * sizeof(char *));
+    if (expanded_strings == NULL) {
+        perror("Memory allocation failed");
+        return NULL;
+    }
+    expanded_strings[num_strings] = NULL;
+    return expanded_strings;
 }
 
 int myShellLaunch(char **args) {
@@ -463,24 +418,30 @@ int execShell(char **args) {
     if (args[0] == NULL) {
         return 1;
     }
-    
+    char **expanded_args = expand_wildcards(args); // Now expand_wildcards returns char **
+    if (expanded_args == NULL) {
+        return 1;
+    }
+
     // Loop to check for builtin functions
     for (int i = 0; i < numBuiltin(); i++) {
-        if (strcmp(args[0], builtin_cmd[i]) == 0) {
-            return (*builtin_func[i])(args);
+        if (strcmp(expanded_args[0], builtin_cmd[i]) == 0) {
+            int result = (*builtin_func[i])(expanded_args);
+            free(expanded_args); // Free memory allocated by expand_wildcards
+            return result;
         }
     }
+
     // Handle redirection
-    if (myShell_execute(args)) {
+    if (myShell_execute(expanded_args)) {
+        free(expanded_args); // Free memory allocated by expand_wildcards
         return 1;
     }
-    // Handle Wildcards
-    if (expand_wildcards(args)){
-        return 1;
-    }
-    
+
     // If no piping or redirection, launch command normally
-    return myShellLaunch(args);
+    int result = myShellLaunch(expanded_args);
+    free(expanded_args); // Free memory allocated by expand_wildcards
+    return result;
 }
 
 // When myShell is called Interactively
