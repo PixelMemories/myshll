@@ -230,6 +230,7 @@ void execute_command(char *args[]) {
         }
     }
     while (args[arg_count] != NULL) {
+        printf("arg1 %s\n",args[arg_count]);
         if (strcmp(args[arg_count], "|") == 0) { // Handle pipe
             args[arg_count] = NULL;
             arg_count = 0;
