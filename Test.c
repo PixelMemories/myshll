@@ -514,10 +514,10 @@ int myShellInteract() {
         line = readLine();
         args = splitLine(line);
         //Do Shell
-        if (expanded_args[0] == "then" && LastComStat == 0){
-            return 1;
-        } else if (expanded_args[0] == "else" && LastComStat == 1){
-            return 1;
+        if (args[0] == "then" && LastComStat == 0){
+            printf("nope\n");
+        } else if (args[0] == "else" && LastComStat == 1){
+            printf("nope\n");
         } else {
             execShell(args);
         }
