@@ -226,6 +226,7 @@ void execute_command(char *args[]) {
     for (int i = 0; i < numBuiltin(); i++) {
         if (strcmp(args[0], builtin_cmd[i]) == 0) {
             execShell(args);
+            return;
         }
     }
     while (args[arg_count] != NULL) {
