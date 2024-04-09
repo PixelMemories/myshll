@@ -482,13 +482,7 @@ int execShell(char **args) {
         return 1;
     }
 
-    if (expanded_args[0] == "then" && LastComStat == 0){
-        return 1;
-    }
-
-    if (expanded_args[0] == "else" && LastComStat == 1){
-        return 1;
-    }
+    
     
     // Loop to check for builtin functions
     for (int i = 0; i < numBuiltin(); i++) {
@@ -520,7 +514,13 @@ int myShellInteract() {
         line = readLine();
         args = splitLine(line);
         //Do Shell
-        execShell(args);
+        if (expanded_args[0] == "then" && LastComStat == 0){
+            return 1;
+        } else if (expanded_args[0] == "else" && LastComStat == 1){
+            return 1;
+        } else {
+            execShell(args);
+        }
         free(line);
         free(args);
     }
