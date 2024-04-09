@@ -1,11 +1,11 @@
-#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
-#include <dirent.h>
-#include <sys/types.h>
 #include <unistd.h>
+#include <string.h>
+#include <fcntl.h>
 #include <sys/wait.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 #include <glob.h>
 
 
@@ -13,6 +13,7 @@ char SHELL_NAME[50] = "myShell";
 int QUIT = 0;
 
 #define MAX_COMMAND_LENGTH 1024
+#define BUFFER_SIZE 4096
 
 // Function to read a line from command into the buffer
 char *readLine() {
@@ -71,10 +72,53 @@ char **splitLine(char *line) {
     return tokens;
 }
 
+void input_redirection_files(char ** args, int index){
+    char *first_file = args[index]; // Assuming the first file is at index 1
+    
+    // Open the first file for appending
+    int output_fd = open(first_file, O_WRONLY | O_CREAT | O_APPEND, 0666);
+    if (output_fd == -1) {
+        perror("Error opening first file");
+        exit(EXIT_FAILURE);
+    }
+
+    // Iterate through input files starting from the second one
+    for (int i = index+1; args[i] != NULL && strcmp(args[i], ">") != 0 && strcmp(args[i], "|") != 0; i++) {
+        // Open the current input file for reading
+        int input_fd = open(args[i], O_RDONLY);
+        if (input_fd == -1) {
+            perror("Error opening input file");
+            exit(EXIT_FAILURE);
+        }
+
+        // Move to the end of the first file
+        if (lseek(output_fd, 0, SEEK_END) == -1) {
+            perror("Error seeking first file");
+            exit(EXIT_FAILURE);
+        }
+
+        // Copy content of input file to the end of the first file
+        char buffer[4096];
+        ssize_t bytes_read;
+        while ((bytes_read = read(input_fd, buffer, sizeof(buffer))) > 0) {
+            if (write(output_fd, buffer, bytes_read) == -1) {
+                perror("Error writing to first file");
+                exit(EXIT_FAILURE);
+            }
+        }
+
+        close(input_fd);
+    }
+
+    close(output_fd);
+
+
+}
 
 // Function Declarations
 int myShell_cd(char **args);
 int myShell_exit();
+int myShell_execute(char **args);
 int myShell_pwd();
 int myShell_which(char **args);
 
@@ -176,6 +220,234 @@ int myShell_which(char **args) {
     return 1;
 }
 
+
+int myShell_execute(char **args) {
+    int i = 0;
+    int redirect_input = 0, redirect_output = 0, piping = 0;
+    char *input_file = NULL, *output_file = NULL, *pipe_file_1 = NULL, *pipe_file_2 = NULL;
+    char input_buffer[BUFFER_SIZE];
+    ssize_t input_buffer_size = 0;
+
+    // Find input and output files
+    while (args[i] != NULL) {
+        if (strcmp(args[i], "<") == 0) {
+            if (args[i + 1] == NULL) {
+                printf("Missing filename after <\n");
+                return 1;
+            }
+            input_file = args[i+1];
+            redirect_input = 1;
+            
+            // Check for wildcard in input file
+            glob_t glob_result;
+            glob(input_file, GLOB_TILDE, NULL, &glob_result);
+            if (glob_result.gl_pathc > 0) {
+                input_file = glob_result.gl_pathv[0];
+            }
+            globfree(&glob_result);
+
+            // Read the contents of the input file into the buffer
+            int input_fd = open(input_file, O_RDONLY);
+            if (input_fd == -1) {
+                perror("open");
+                return 1;
+            }
+            ssize_t bytes_read;
+            while ((bytes_read = read(input_fd, input_buffer + input_buffer_size, BUFFER_SIZE - input_buffer_size)) > 0) {
+                input_buffer_size += bytes_read;
+                if (input_buffer_size >= BUFFER_SIZE) {
+                    printf("Input file too large to handle\n");
+                    close(input_fd);
+                    return 1;
+                }
+            }
+            close(input_fd);
+            if (bytes_read == -1) {
+                perror("read");
+                return 1;
+            }
+
+            input_redirection_files(args, i+1);
+        } else if (strcmp(args[i], ">") == 0) {
+            if (args[i + 1] == NULL) {
+                printf("Missing filename after >\n");
+                return 1;
+            }
+            output_file = args[i + 1];
+            redirect_output = 1;
+            
+            // Check for wildcard in output file
+            glob_t glob_result;
+            glob(output_file, GLOB_TILDE, NULL, &glob_result);
+            if (glob_result.gl_pathc > 0) {
+                output_file = glob_result.gl_pathv[0];
+            }
+            globfree(&glob_result);
+        } else if (strcmp(args[i], "|") == 0){
+            if (args[i + 1] == NULL) {
+                printf("Missing command after |\n");
+                return 1;
+            }
+            pipe_file_1 = args[i - 1];
+            pipe_file_2 = args[i + 1];
+
+            piping = 1;
+        }
+        i++;
+    }
+
+    int pid;
+    int pipefd[2];
+    
+    if (piping) {
+        if (pipe(pipefd) == -1) {
+            perror("pipe");
+            return 1;
+        }
+    }
+
+    pid = fork();
+
+    if (pid == 0) {
+        // Child process
+        if (redirect_input) {
+            int input_fd = open(input_file, O_RDONLY);
+            if (input_fd == -1) {
+                perror("open");
+                exit(EXIT_FAILURE);
+            }
+            dup2(input_fd, STDIN_FILENO);
+            close(input_fd);
+        }
+
+        if (piping) {
+            close(pipefd[0]); // Close unused read end of the pipe
+            dup2(pipefd[1], STDOUT_FILENO); // Redirect stdout to the write end of the pipe
+            close(pipefd[1]); // Close the write end of the pipe
+        }
+
+        execvp(args[0], args);
+        perror("execvp");
+        exit(EXIT_FAILURE);
+    } else if (pid < 0) {
+        // Forking Error
+        perror("fork");
+        return 1;
+    } else {
+        // Inside the parent process
+        int status;
+        waitpid(pid, &status, 0); // Wait for the child process to complete
+
+        if (piping) {
+            int pid2 = fork();
+            if (pid2 == 0) {
+                // Child process for the second command in the pipeline
+                close(pipefd[1]); // Close unused write end of the pipe
+                dup2(pipefd[0], STDIN_FILENO); // Redirect stdin to the read end of the pipe
+                close(pipefd[0]); // Close the read end of the pipe
+
+                if (redirect_output) {
+                    int output_fd = open(output_file, O_CREAT | O_WRONLY | O_TRUNC, 0666);
+                    if (output_fd == -1) {
+                        perror("open");
+                        exit(EXIT_FAILURE);
+                    }
+                    dup2(output_fd, STDOUT_FILENO);
+                    close(output_fd);
+                }
+
+                char *args2[] = {pipe_file_2, NULL};
+                execvp(args2[0], args2);
+                perror("execvp");
+                exit(EXIT_FAILURE);
+            } else if (pid2 < 0) {
+                perror("fork");
+                return 1;
+            }
+            close(pipefd[0]); // Close the read end of the pipe in the parent process
+            close(pipefd[1]); // Close the write end of the pipe in the parent process
+            waitpid(pid2, &status, 0); // Wait for the second child process to complete
+        } else if (redirect_output) {
+            int pid3 = fork();
+            if (pid3 == 0) {
+                // Child process for redirecting output to file without piping
+                int output_fd = open(output_file, O_CREAT | O_WRONLY | O_TRUNC, 0666);
+                if (output_fd == -1) {
+                    perror("open");
+                    exit(EXIT_FAILURE);
+                }
+                dup2(output_fd, STDOUT_FILENO);
+                close(output_fd);
+
+                execvp(args[0], args);
+                perror("execvp");
+                exit(EXIT_FAILURE);
+            } else if (pid3 < 0) {
+                perror("fork");
+                return 1;
+            }
+            waitpid(pid3, &status, 0); // Wait for the child process to complete
+        }
+
+        // If input redirection is enabled, overwrite the input file with the buffer contents
+        if (redirect_input) {
+            int input_fd = open(input_file, O_WRONLY | O_TRUNC);
+            if (input_fd == -1) {
+                perror("open");
+                return 1;
+            }
+            if (write(input_fd, input_buffer, input_buffer_size) == -1) {
+                perror("write");
+                return 1;
+            }
+            close(input_fd);
+        }
+
+        return 1;
+    }
+
+    return 0;
+}
+
+int match(const char *pattern, const char *filename) {
+    while (*pattern && *filename) {
+        if (*pattern == '*') {
+            while (*filename) {
+                if (match(pattern + 1, filename))
+                    return 1;
+                filename++;
+            }
+            return *pattern == '\0';
+        } else if (*pattern != '?' && *pattern != *filename) {
+            return 0;
+        }
+        pattern++;
+        filename++;
+    }
+    return !*pattern && !*filename;
+}
+
+int expand_wildcards(char **args) {
+    struct dirent *entry;
+    DIR *dir = opendir(".");
+    if (dir == NULL) {
+        perror("opendir");
+        return 0;
+    }
+    while ((entry = readdir(dir)) != NULL) {
+        for (int i = 1; args[i] != NULL; i++) {
+            if (strchr(args[i], '*') != NULL) {
+                if (match(args[i], entry->d_name)) {
+                    args[i] = strdup(entry->d_name);
+                }
+            }
+        }
+    }
+    closedir(dir);
+    printf("I got here\n");
+    return 1;
+}
+
 int myShellLaunch(char **args) {
     pid_t pid, wpid;
     int status;
@@ -204,6 +476,7 @@ int execShell(char **args) {
     if (args[0] == NULL) {
         return 1;
     }
+    
     // Loop to check for builtin functions
     for (int i = 0; i < numBuiltin(); i++) {
         if (strcmp(args[0], builtin_cmd[i]) == 0) {
@@ -211,87 +484,17 @@ int execShell(char **args) {
         }
     }
     // Handle redirection
+    if (myShell_execute(args)) {
+        return 1;
+    }
+    // Handle Wildcards
+    if (expand_wildcards(args)){
+        return 1;
+    }
     
     // If no piping or redirection, launch command normally
     return myShellLaunch(args);
 }
-
-void execute_command(char *args[]) {
-    int arg_count = 0;
-    int pipe_fd[2];
-    pid_t pid;
-    
-    // Parse command arguments
-    // Loop to check for builtin functions
-    for (int i = 0; i < numBuiltin(); i++) {
-        if (strcmp(args[0], builtin_cmd[i]) == 0) {
-            execShell(args);
-            return;
-        }
-    }
-    while (args[arg_count] != NULL) {
-        if (strcmp(args[arg_count], "|") == 0) { // Handle pipe
-            args[arg_count] = NULL;
-
-            pipe(pipe_fd);
-
-            if ((pid = fork()) == 0) { // Child process
-                close(pipe_fd[0]);
-                dup2(pipe_fd[1], STDOUT_FILENO);
-                close(pipe_fd[1]);
-                execvp(args[0], args);
-                perror("execvp");
-                exit(EXIT_FAILURE);
-            } else if (pid < 0) { // Fork error
-                perror("fork");
-                exit(EXIT_FAILURE);
-            } else { // Parent process
-                close(pipe_fd[1]);
-                wait(NULL);
-                dup2(pipe_fd[0], STDIN_FILENO);
-                close(pipe_fd[0]);
-            }
-            
-            // Move to the next command after the pipe
-            while (args[arg_count] != NULL) {
-                arg_count++;
-                if (strcmp(args[arg_count], "|") != 0) {
-                    break;
-                }
-            }
-        } else if (strcmp(args[arg_count], ">") == 0) { // Handle redirect output
-            char *filename = args[arg_count + 1];
-            int fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0666);
-            dup2(fd, STDOUT_FILENO);
-            close(fd);
-            args[arg_count] = NULL; // Nullify '>'
-            args[arg_count + 1] = NULL; // Nullify filename
-            arg_count += 2; // Skip the filename
-        } else if (strcmp(args[arg_count], "<") == 0) { // Handle redirect input
-            char *filename = args[arg_count + 1];
-            int fd = open(filename, O_RDONLY);
-            dup2(fd, STDIN_FILENO);
-            close(fd);
-            args[arg_count] = NULL; // Nullify '<'
-            args[arg_count + 1] = NULL; // Nullify filename
-            arg_count += 2; // Skip the filename
-        } else { // Handle command arguments
-            arg_count++;
-        }
-    }
-
-    if ((pid = fork()) == 0) { // Child process
-        execvp(args[0], args);
-        perror("execvp");
-        exit(EXIT_FAILURE);
-    } else if (pid < 0) { // Fork error
-        perror("fork");
-        exit(EXIT_FAILURE);
-    } else { // Parent process
-        wait(NULL);
-    }
-}
-
 
 // When myShell is called Interactively
 int myShellInteract() {
@@ -301,8 +504,8 @@ int myShellInteract() {
         printf("%s> ", SHELL_NAME);
         line = readLine();
         args = splitLine(line);
-        execute_command(args);
-        printf("I GOT HERE \n");
+        //Do Shell
+        execShell(args);
         free(line);
         free(args);
     }
