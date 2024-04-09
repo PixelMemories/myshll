@@ -178,18 +178,14 @@ int myShell_which(char **args) {
 }
 
 
-void execute_command(const char *command) {
-    char *args[MAX_ARGS];
-    char *token, *rest;
+void execute_command(char *args[]) {
     int arg_count = 0;
     int pipe_fd[2];
     pid_t pid;
 
-    rest = strdup(command);
-
-    // Parse command into tokens
-    while ((token = strtok_r(rest, " ", &rest))) {
-        if (strcmp(token, "|") == 0) { // Handle pipe
+    // Parse command arguments
+    while (args[arg_count] != NULL) {
+        if (strcmp(args[arg_count], "|") == 0) { // Handle pipe
             args[arg_count] = NULL;
             arg_count = 0;
 
@@ -211,31 +207,24 @@ void execute_command(const char *command) {
                 dup2(pipe_fd[0], STDIN_FILENO);
                 close(pipe_fd[0]);
             }
-        } else if (strcmp(token, ">") == 0) { // Handle redirect output
-            token = strtok_r(NULL, " ", &rest);
-            int fd = open(token, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+        } else if (strcmp(args[arg_count], ">") == 0) { // Handle redirect output
+            char *filename = args[arg_count + 1];
+            int fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0666);
             dup2(fd, STDOUT_FILENO);
             close(fd);
-        } else if (strcmp(token, "<") == 0) { // Handle redirect input
-            token = strtok_r(NULL, " ", &rest);
-            int fd = open(token, O_RDONLY);
+            args[arg_count] = NULL; // Nullify '>' and filename
+            args[arg_count + 1] = NULL;
+        } else if (strcmp(args[arg_count], "<") == 0) { // Handle redirect input
+            char *filename = args[arg_count + 1];
+            int fd = open(filename, O_RDONLY);
             dup2(fd, STDIN_FILENO);
             close(fd);
+            args[arg_count] = NULL; // Nullify '<' and filename
+            args[arg_count + 1] = NULL;
         } else { // Handle command arguments
-            glob_t glob_result;
-            if (strchr(token, '*') != NULL) { // Check for wildcard
-                glob(token, GLOB_TILDE, NULL, &glob_result);
-                for (int i = 0; i < glob_result.gl_pathc; ++i) {
-                    args[arg_count++] = strdup(glob_result.gl_pathv[i]);
-                }
-                globfree(&glob_result);
-            } else {
-                args[arg_count++] = strdup(token);
-            }
+            arg_count++;
         }
     }
-
-    args[arg_count] = NULL;
 
     if ((pid = fork()) == 0) { // Child process
         execvp(args[0], args);
@@ -247,13 +236,7 @@ void execute_command(const char *command) {
     } else { // Parent process
         wait(NULL);
     }
-
-    free(rest);
-    for (int i = 0; i < arg_count; ++i) {
-        free(args[i]);
-    }
 }
-
 
 
 int myShellLaunch(char **args) {
@@ -314,6 +297,7 @@ int myShellInteract() {
     while (QUIT == 0) {
         printf("%s> ", SHELL_NAME);
         line = readLine();
+        args = splitLine(line);
         execute_command(args);
         free(line);
         free(args);
