@@ -516,6 +516,8 @@ int myShellInteract() {
             printf("nope\n");
         } else if (args[0] == "else" && LastComStat == 1){
             printf("nope\n");
+        } else if (args[0] == "then" || args[0] == "else"){
+            execShell(*(args+1));
         } else {
             execShell(args);
         }
