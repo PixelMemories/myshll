@@ -469,7 +469,7 @@ int myShell_execute(char **args) {
     int num_output_files = 0;
     int store_output = 0; // Flag to indicate when to start storing output files
 
-    int ret;
+    int ret = 0;
 
     for (int i = 0; args[i] != NULL; i++) {
         if (strcmp(args[i], ">") == 0) {
