@@ -223,7 +223,7 @@ int myShell_which(char **args) {
 int execute_command(char **args, char *output_file){
     int i = 0;
     int redirect_input = 0, redirect_output = 0, piping = 0;
-    char *input_file = NULL, *pipe_file_2 = NULL;
+    char *input_file = NULL, *pipe_file_1 = NULL, *pipe_file_2 = NULL;
     char input_buffer[BUFFER_SIZE];
     ssize_t input_buffer_size = 0;
 
@@ -544,7 +544,7 @@ char **expand_wildcards(char *tokens[]) {
 }
 
 int myShellLaunch(char **args) {
-    pid_t pid;
+    pid_t pid, wpid;
     int status;
     pid = fork();
     if (pid == 0) {
