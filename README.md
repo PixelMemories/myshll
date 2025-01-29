@@ -1,4 +1,4 @@
-My shell - CS214 P2
+My shell
 
 [ MEMBERS ]
 Colin Cunningham - cdc166
